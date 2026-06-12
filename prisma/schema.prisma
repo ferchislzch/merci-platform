@@ -1,0 +1,949 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model agentes_virtuales {
+  id                        String                  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id                String                  @db.Uuid
+  departamento_id           String?                 @db.Uuid
+  sucursal_id               String?                 @db.Uuid
+  numero_entrada            String?                 @db.VarChar(10)
+  nombre                    String                  @db.VarChar(100)
+  descripcion               String?
+  tipo_agente_id            String?                 @db.Uuid
+  estado_agente_id          String?                 @db.Uuid
+  calendario_id             String?                 @db.Uuid
+  pbx_ivr_id                String?                 @db.VarChar(50)
+  pbx_extension             String?                 @db.VarChar(10)
+  grupo_atencion_default_id String?                 @db.Uuid
+  deleted_at                DateTime?               @db.Timestamp(6)
+  fecha_registro            DateTime?               @default(now()) @db.Timestamp(6)
+  fecha_actualizacion       DateTime?               @default(now()) @db.Timestamp(6)
+  calendarios               calendarios?            @relation(fields: [calendario_id], references: [id], onUpdate: NoAction, map: "fk_av_calendario")
+  departamentos             departamentos?          @relation(fields: [departamento_id], references: [id], onUpdate: NoAction, map: "fk_av_departamento")
+  empresas                  empresas                @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_av_empresa")
+  catalogo_estado_agente    catalogo_estado_agente? @relation(fields: [estado_agente_id], references: [id], onUpdate: NoAction, map: "fk_av_estado")
+  grupos_atencion           grupos_atencion?        @relation(fields: [grupo_atencion_default_id], references: [id], onUpdate: NoAction, map: "fk_av_grupo_default")
+  sucursales                sucursales?             @relation(fields: [sucursal_id], references: [id], onUpdate: NoAction, map: "fk_av_sucursal")
+  catalogo_tipo_agente      catalogo_tipo_agente?   @relation(fields: [tipo_agente_id], references: [id], onUpdate: NoAction, map: "fk_av_tipo")
+  llamadas                  llamadas[]
+  versiones_prompt          versiones_prompt?
+
+  @@unique([empresa_id, numero_entrada], map: "uq_agente_numero_entrada", where: raw("((numero_entrada IS NOT NULL) AND (deleted_at IS NULL))"))
+  @@unique([empresa_id, pbx_ivr_id], map: "uq_agente_pbx_ivr", where: raw("((pbx_ivr_id IS NOT NULL) AND (deleted_at IS NULL))"))
+  @@index([empresa_id], map: "idx_agentes_empresa")
+}
+
+model auditoria_logs {
+  id               BigInt    @id @default(autoincrement())
+  empresa_id       String    @db.Uuid
+  usuario_id       String?   @db.Uuid
+  ip               String?   @db.VarChar(45)
+  modulo           String?   @db.VarChar(100)
+  accion           String    @db.VarChar(100)
+  tabla_afectada   String?   @db.VarChar(100)
+  registro_id      String?   @db.Uuid
+  datos_anteriores Json?
+  datos_nuevos     Json?
+  fecha_evento     DateTime? @default(now()) @db.Timestamp(6)
+  empresas         empresas  @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_audit_empresa")
+  usuarios         usuarios? @relation(fields: [usuario_id], references: [id], onUpdate: NoAction, map: "fk_audit_usuario")
+
+  @@index([empresa_id], map: "idx_auditoria_empresa")
+  @@index([fecha_evento], map: "idx_auditoria_fecha")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model auditorias_comandos_ia {
+  id                 BigInt    @id @default(autoincrement())
+  empresa_id         String    @db.Uuid
+  usuario_id         String    @db.Uuid
+  llamada_id         String?   @db.Uuid
+  comando_voz_puro   String
+  json_deducido      Json?
+  tokens_consumidos  Int?
+  status_resultado   String    @db.VarChar(20)
+  respuesta_hardware Json?
+  fecha_ejecucion    DateTime? @default(now()) @db.Timestamp(6)
+  empresas           empresas  @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_acia_empresa")
+  llamadas           llamadas? @relation(fields: [llamada_id], references: [id], onUpdate: NoAction, map: "fk_acia_llamada")
+  usuarios           usuarios  @relation(fields: [usuario_id], references: [id], onUpdate: NoAction, map: "fk_acia_usuario")
+
+  @@index([empresa_id, fecha_ejecucion], map: "idx_auditoria_ia_empresa_fecha")
+}
+
+model calendarios {
+  id                  String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id          String              @db.Uuid
+  nombre              String              @db.VarChar(100)
+  descripcion         String?
+  deleted_at          DateTime?           @db.Timestamp(6)
+  fecha_registro      DateTime?           @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime?           @default(now()) @db.Timestamp(6)
+  agentes_virtuales   agentes_virtuales[]
+  empresas            empresas            @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cal_empresa")
+  grupos_atencion     grupos_atencion[]
+  horarios            horarios[]
+
+  @@unique([empresa_id, nombre], map: "uq_calendario_empresa_nombre", where: raw("(deleted_at IS NULL)"))
+}
+
+model catalogo_categorias_faq {
+  id                   String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id           String                 @db.Uuid
+  nombre               String                 @db.VarChar(100)
+  descripcion          String?
+  deleted_at           DateTime?              @db.Timestamp(6)
+  fecha_registro       DateTime?              @default(now()) @db.Timestamp(6)
+  empresas             empresas               @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cfaq_empresa")
+  preguntas_frecuentes preguntas_frecuentes[]
+
+  @@unique([empresa_id, nombre], map: "uq_categoria_faq_empresa_nombre", where: raw("(deleted_at IS NULL)"))
+}
+
+model catalogo_categorias_productos {
+  id                  String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id          String                @db.Uuid
+  nombre              String                @db.VarChar(100)
+  descripcion         String?
+  deleted_at          DateTime?             @db.Timestamp(6)
+  fecha_registro      DateTime?             @default(now()) @db.Timestamp(6)
+  empresas            empresas              @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cp_empresa")
+  productos_servicios productos_servicios[]
+
+  @@unique([empresa_id, nombre], map: "uq_categoria_producto_empresa_nombre", where: raw("(deleted_at IS NULL)"))
+}
+
+model catalogo_estado_agente {
+  id                String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre            String              @db.VarChar(50)
+  deleted_at        DateTime?           @db.Timestamp(6)
+  agentes_virtuales agentes_virtuales[]
+}
+
+model catalogo_estado_extension {
+  id          String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre      String        @db.VarChar(50)
+  deleted_at  DateTime?     @db.Timestamp(6)
+  extensiones extensiones[]
+}
+
+model catalogo_estado_llamada {
+  id         String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre     String     @db.VarChar(50)
+  deleted_at DateTime?  @db.Timestamp(6)
+  llamadas   llamadas[]
+}
+
+model catalogo_estado_ticket {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre      String    @db.VarChar(50)
+  descripcion String?
+  deleted_at  DateTime? @db.Timestamp(6)
+  tickets     tickets[]
+}
+
+model catalogo_estado_usuario {
+  id         String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre     String     @db.VarChar(50)
+  deleted_at DateTime?  @db.Timestamp(6)
+  usuarios   usuarios[]
+}
+
+model catalogo_estado_workflow {
+  id          String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre      String      @db.VarChar(50)
+  descripcion String?
+  deleted_at  DateTime?   @db.Timestamp(6)
+  workflows   workflows[]
+}
+
+model catalogo_prioridad_ticket {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre      String    @db.VarChar(50)
+  descripcion String?
+  deleted_at  DateTime? @db.Timestamp(6)
+  tickets     tickets[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model catalogo_proveedores_ia {
+  id                                                                                        String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre                                                                                    String                    @db.VarChar(100)
+  tipo                                                                                      String                    @db.VarChar(20)
+  deleted_at                                                                                DateTime?                 @db.Timestamp(6)
+  configuraciones_empresa_configuraciones_empresa_proveedor_llm_idTocatalogo_proveedores_ia configuraciones_empresa[] @relation("configuraciones_empresa_proveedor_llm_idTocatalogo_proveedores_ia")
+  configuraciones_empresa_configuraciones_empresa_proveedor_stt_idTocatalogo_proveedores_ia configuraciones_empresa[] @relation("configuraciones_empresa_proveedor_stt_idTocatalogo_proveedores_ia")
+  configuraciones_empresa_configuraciones_empresa_proveedor_tts_idTocatalogo_proveedores_ia configuraciones_empresa[] @relation("configuraciones_empresa_proveedor_tts_idTocatalogo_proveedores_ia")
+  consumo_ia                                                                                consumo_ia[]
+  llamadas                                                                                  llamadas[]
+}
+
+model catalogo_resultado_llamada {
+  id         String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre     String     @db.VarChar(50)
+  deleted_at DateTime?  @db.Timestamp(6)
+  llamadas   llamadas[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model catalogo_roles {
+  id                  String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id          String?          @db.Uuid
+  nombre              String           @unique(map: "uq_roles_global_nombre", where: raw("((empresa_id IS NULL) AND (deleted_at IS NULL))")) @db.VarChar(50)
+  descripcion         String?
+  es_global           Boolean?         @default(false)
+  deleted_at          DateTime?        @db.Timestamp(6)
+  fecha_registro      DateTime?        @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime?        @default(now()) @db.Timestamp(6)
+  empresas            empresas?        @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_roles_empresa")
+  roles_permisos      roles_permisos[]
+  usuario_roles       usuario_roles[]
+
+  @@unique([empresa_id, nombre], map: "uq_roles_empresa_nombre_local", where: raw("((empresa_id IS NOT NULL) AND (deleted_at IS NULL))"))
+}
+
+model catalogo_sentimientos {
+  id         String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre     String     @db.VarChar(50)
+  deleted_at DateTime?  @db.Timestamp(6)
+  llamadas   llamadas[]
+}
+
+model catalogo_tipo_agente {
+  id                String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id        String              @db.Uuid
+  nombre            String              @db.VarChar(100)
+  descripcion       String?
+  deleted_at        DateTime?           @db.Timestamp(6)
+  fecha_registro    DateTime?           @default(now()) @db.Timestamp(6)
+  agentes_virtuales agentes_virtuales[]
+  empresas          empresas            @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ta_empresa")
+}
+
+model catalogo_tipo_documento_ia {
+  id            String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre        String          @db.VarChar(50)
+  descripcion   String?
+  deleted_at    DateTime?       @db.Timestamp(6)
+  documentos_ia documentos_ia[]
+}
+
+model catalogo_tipo_evento {
+  id                  String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  clave               String                @unique @db.VarChar(50)
+  nombre              String                @db.VarChar(100)
+  descripcion         String?
+  deleted_at          DateTime?             @db.Timestamp(6)
+  eventos_tiempo_real eventos_tiempo_real[]
+}
+
+model catalogo_tipo_transferencia {
+  id              String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id      String            @db.Uuid
+  nombre          String            @db.VarChar(50)
+  descripcion     String?
+  deleted_at      DateTime?         @db.Timestamp(6)
+  fecha_registro  DateTime?         @default(now()) @db.Timestamp(6)
+  empresas        empresas          @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tt_empresa")
+  grupos_atencion grupos_atencion[]
+
+  @@unique([empresa_id, nombre], map: "uq_tipo_transferencia_empresa_nombre", where: raw("(deleted_at IS NULL)"))
+}
+
+model catalogo_tipo_visibilidad {
+  id          String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre      String        @db.VarChar(50)
+  descripcion String?
+  deleted_at  DateTime?     @db.Timestamp(6)
+  extensiones extensiones[]
+}
+
+model clientes {
+  id                  String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id          String              @db.Uuid
+  nombre              String              @db.VarChar(100)
+  apellido            String?             @db.VarChar(100)
+  empresa_cliente     String?             @db.VarChar(150)
+  ultimo_contacto     DateTime?           @db.Timestamp(6)
+  notas               String?
+  deleted_at          DateTime?           @db.Timestamp(6)
+  fecha_registro      DateTime?           @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime?           @default(now()) @db.Timestamp(6)
+  empresas            empresas            @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_clientes_empresa")
+  emails_cliente      emails_cliente[]
+  llamadas            llamadas[]
+  telefonos_cliente   telefonos_cliente[]
+  tickets             tickets[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model configuraciones_empresa {
+  id                                                                                        String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id                                                                                String                   @unique @db.Uuid
+  voz_ia                                                                                    String?                  @db.VarChar(50)
+  idioma                                                                                    String?                  @default("es") @db.VarChar(10)
+  timeout_seg                                                                               Int?                     @default(30)
+  proveedor_stt_id                                                                          String?                  @db.Uuid
+  proveedor_tts_id                                                                          String?                  @db.Uuid
+  proveedor_llm_id                                                                          String?                  @db.Uuid
+  credenciales_ia                                                                           Json?
+  modelo_ia                                                                                 String?                  @default("gpt-4o") @db.VarChar(50)
+  temperatura_modelo                                                                        Decimal?                 @default(0.7) @db.Decimal(3, 2)
+  metadata                                                                                  Json?
+  fecha_actualizacion                                                                       DateTime?                @default(now()) @db.Timestamp(6)
+  empresas                                                                                  empresas                 @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ce_empresa")
+  catalogo_proveedores_ia_configuraciones_empresa_proveedor_llm_idTocatalogo_proveedores_ia catalogo_proveedores_ia? @relation("configuraciones_empresa_proveedor_llm_idTocatalogo_proveedores_ia", fields: [proveedor_llm_id], references: [id], onUpdate: NoAction, map: "fk_ce_llm")
+  catalogo_proveedores_ia_configuraciones_empresa_proveedor_stt_idTocatalogo_proveedores_ia catalogo_proveedores_ia? @relation("configuraciones_empresa_proveedor_stt_idTocatalogo_proveedores_ia", fields: [proveedor_stt_id], references: [id], onUpdate: NoAction, map: "fk_ce_stt")
+  catalogo_proveedores_ia_configuraciones_empresa_proveedor_tts_idTocatalogo_proveedores_ia catalogo_proveedores_ia? @relation("configuraciones_empresa_proveedor_tts_idTocatalogo_proveedores_ia", fields: [proveedor_tts_id], references: [id], onUpdate: NoAction, map: "fk_ce_tts")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model configuraciones_pbx {
+  id                   String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id           String                 @db.Uuid
+  proveedor            String                 @default("grandstream") @db.VarChar(50)
+  api_url              String
+  api_usuario          String                 @db.VarChar(100)
+  auth_tipo            String?                @default("md5_token") @db.VarChar(30)
+  credenciales         Json
+  activo               Boolean?               @default(true)
+  deleted_at           DateTime?              @db.Timestamp(6)
+  fecha_registro       DateTime?              @default(now()) @db.Timestamp(6)
+  fecha_actualizacion  DateTime?              @default(now()) @db.Timestamp(6)
+  empresas             empresas               @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pbx_empresa")
+  pbx_eventos_raw      pbx_eventos_raw[]
+  sincronizaciones_pbx sincronizaciones_pbx[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model consumo_ia {
+  id                      String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id              String                   @db.Uuid
+  llamada_id              String?                  @db.Uuid
+  proveedor_id            String?                  @db.Uuid
+  tokens_entrada          Int?                     @default(0)
+  tokens_salida           Int?                     @default(0)
+  costo_estimado          Decimal?                 @default(0) @db.Decimal(10, 6)
+  fecha_registro          DateTime?                @default(now()) @db.Timestamp(6)
+  empresas                empresas                 @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cia_empresa")
+  llamadas                llamadas?                @relation(fields: [llamada_id], references: [id], onUpdate: NoAction, map: "fk_cia_llamada")
+  catalogo_proveedores_ia catalogo_proveedores_ia? @relation(fields: [proveedor_id], references: [id], onUpdate: NoAction, map: "fk_cia_proveedor")
+
+  @@index([empresa_id], map: "idx_consumo_empresa")
+}
+
+model departamentos {
+  id                  String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sucursal_id         String              @db.Uuid
+  nombre              String              @db.VarChar(100)
+  deleted_at          DateTime?           @db.Timestamp(6)
+  fecha_registro      DateTime?           @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime?           @default(now()) @db.Timestamp(6)
+  agentes_virtuales   agentes_virtuales[]
+  sucursales          sucursales          @relation(fields: [sucursal_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_dep_sucursal")
+  extensiones         extensiones[]
+  tickets             tickets[]
+}
+
+model documentos_ia {
+  id                         String                      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id                 String                      @db.Uuid
+  titulo                     String                      @db.VarChar(200)
+  contenido                  String?
+  tipo_documento_id          String?                     @db.Uuid
+  deleted_at                 DateTime?                   @db.Timestamp(6)
+  fecha_registro             DateTime?                   @default(now()) @db.Timestamp(6)
+  fecha_actualizacion        DateTime?                   @default(now()) @db.Timestamp(6)
+  empresas                   empresas                    @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_dia_empresa")
+  catalogo_tipo_documento_ia catalogo_tipo_documento_ia? @relation(fields: [tipo_documento_id], references: [id], onUpdate: NoAction, map: "fk_dia_tipo")
+}
+
+model emails_cliente {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  cliente_id     String    @db.Uuid
+  correo         String    @db.Citext
+  es_principal   Boolean?  @default(false)
+  fecha_registro DateTime? @default(now()) @db.Timestamp(6)
+  clientes       clientes  @relation(fields: [cliente_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_email_cliente")
+
+  @@unique([cliente_id, correo], map: "uq_emails_cliente_cliente_correo")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model empresas {
+  id                            String                          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nombre_comercial              String                          @db.VarChar(100)
+  razon_social                  String?                         @db.VarChar(150)
+  rfc                           String?                         @db.VarChar(13)
+  telefono                      String?                         @db.VarChar(20)
+  correo                        String?                         @db.Citext
+  status                        String?                         @default("activo") @db.VarChar(20)
+  deleted_at                    DateTime?                       @db.Timestamp(6)
+  fecha_registro                DateTime?                       @default(now()) @db.Timestamp(6)
+  fecha_actualizacion           DateTime?                       @default(now()) @db.Timestamp(6)
+  agentes_virtuales             agentes_virtuales[]
+  auditoria_logs                auditoria_logs[]
+  auditorias_comandos_ia        auditorias_comandos_ia[]
+  calendarios                   calendarios[]
+  catalogo_categorias_faq       catalogo_categorias_faq[]
+  catalogo_categorias_productos catalogo_categorias_productos[]
+  catalogo_roles                catalogo_roles[]
+  catalogo_tipo_agente          catalogo_tipo_agente[]
+  catalogo_tipo_transferencia   catalogo_tipo_transferencia[]
+  clientes                      clientes[]
+  configuraciones_empresa       configuraciones_empresa?
+  configuraciones_pbx           configuraciones_pbx[]
+  consumo_ia                    consumo_ia[]
+  documentos_ia                 documentos_ia[]
+  eventos_agenda                eventos_agenda[]
+  eventos_tiempo_real           eventos_tiempo_real[]
+  extensiones                   extensiones[]
+  grupos_atencion               grupos_atencion[]
+  informacion_negocio           informacion_negocio[]
+  jobs_async                    jobs_async[]
+  listas_extensiones            listas_extensiones[]
+  listas_faq                    listas_faq[]
+  listas_productos              listas_productos[]
+  llamadas                      llamadas[]
+  pbx_eventos_raw               pbx_eventos_raw[]
+  puestos                       puestos[]
+  sincronizaciones_pbx          sincronizaciones_pbx[]
+  sucursales                    sucursales[]
+  tickets                       tickets[]
+  usuarios                      usuarios[]
+  workflows                     workflows[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model eventos_agenda {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id       String    @db.Uuid
+  usuario_id       String    @db.Uuid
+  titulo           String    @db.VarChar(200)
+  descripcion      String?
+  fecha_inicio     DateTime  @db.Timestamp(6)
+  fecha_fin        DateTime? @db.Timestamp(6)
+  origen_ia        Boolean?  @default(false)
+  google_event_id  String?   @db.VarChar(255)
+  outlook_event_id String?   @db.VarChar(255)
+  deleted_at       DateTime? @db.Timestamp(6)
+  fecha_registro   DateTime? @default(now()) @db.Timestamp(6)
+  empresas         empresas  @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_agenda_empresa")
+  usuarios         usuarios  @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_agenda_usuario")
+}
+
+model eventos_tiempo_real {
+  id                   String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id           String                @db.Uuid
+  tipo_evento_id       String?               @db.Uuid
+  descripcion          String?
+  procesado            Boolean?              @default(false)
+  metadata             Json?
+  fecha_evento         DateTime?             @default(now()) @db.Timestamp(6)
+  empresas             empresas              @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_etr_empresa")
+  catalogo_tipo_evento catalogo_tipo_evento? @relation(fields: [tipo_evento_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_etr_tipo_evento")
+
+  @@index([empresa_id], map: "idx_eventos_empresa")
+  @@index([empresa_id], map: "idx_eventos_no_procesados", where: raw("(procesado = false)"))
+  @@index([tipo_evento_id, fecha_evento(sort: Desc)], map: "idx_eventos_tipo")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model extensiones {
+  id                        String                     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id                String                     @db.Uuid
+  sucursal_id               String?                    @db.Uuid
+  lista_extension_id        String?                    @db.Uuid
+  extension                 String                     @db.VarChar(10)
+  nombre                    String?                    @db.VarChar(100)
+  puesto_id                 String?                    @db.Uuid
+  departamento_id           String?                    @db.Uuid
+  correo                    String?                    @db.Citext
+  tipo_visibilidad_id       String?                    @db.Uuid
+  estado_extension_id       String?                    @db.Uuid
+  pbx_mac_address           String?                    @db.VarChar(12)
+  deleted_at                DateTime?                  @db.Timestamp(6)
+  fecha_registro            DateTime?                  @default(now()) @db.Timestamp(6)
+  fecha_actualizacion       DateTime?                  @default(now()) @db.Timestamp(6)
+  departamentos             departamentos?             @relation(fields: [departamento_id], references: [id], onUpdate: NoAction, map: "fk_ext_departamento")
+  empresas                  empresas                   @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ext_empresa")
+  catalogo_estado_extension catalogo_estado_extension? @relation(fields: [estado_extension_id], references: [id], onUpdate: NoAction, map: "fk_ext_estado")
+  listas_extensiones        listas_extensiones?        @relation(fields: [lista_extension_id], references: [id], onUpdate: NoAction, map: "fk_ext_lista")
+  puestos                   puestos?                   @relation(fields: [puesto_id], references: [id], onUpdate: NoAction, map: "fk_ext_puesto")
+  sucursales                sucursales?                @relation(fields: [sucursal_id], references: [id], onUpdate: NoAction, map: "fk_ext_sucursal")
+  catalogo_tipo_visibilidad catalogo_tipo_visibilidad? @relation(fields: [tipo_visibilidad_id], references: [id], onUpdate: NoAction, map: "fk_ext_visibilidad")
+  grupos_extensiones        grupos_extensiones[]
+  llamadas                  llamadas[]
+  usuario_extensiones       usuario_extensiones[]
+
+  @@unique([empresa_id, extension], map: "uq_empresa_extension")
+  @@index([empresa_id], map: "idx_extensiones_empresa")
+}
+
+model grupos_atencion {
+  id                          String                       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id                  String                       @db.Uuid
+  clave                       String                       @db.VarChar(50)
+  descripcion                 String?
+  correo_grupo                String?                      @db.Citext
+  tipo_transferencia_id       String?                      @db.Uuid
+  calendario_id               String?                      @db.Uuid
+  pbx_queue_id                String?                      @db.VarChar(50)
+  deleted_at                  DateTime?                    @db.Timestamp(6)
+  fecha_registro              DateTime?                    @default(now()) @db.Timestamp(6)
+  fecha_actualizacion         DateTime?                    @default(now()) @db.Timestamp(6)
+  agentes_virtuales           agentes_virtuales[]
+  calendarios                 calendarios?                 @relation(fields: [calendario_id], references: [id], onUpdate: NoAction, map: "fk_ga_calendario")
+  empresas                    empresas                     @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ga_empresa")
+  catalogo_tipo_transferencia catalogo_tipo_transferencia? @relation(fields: [tipo_transferencia_id], references: [id], onUpdate: NoAction, map: "fk_ga_transferencia")
+  grupos_extensiones          grupos_extensiones[]
+  llamadas                    llamadas[]
+}
+
+model grupos_extensiones {
+  grupo_id        String          @db.Uuid
+  extension_id    String          @db.Uuid
+  fecha_registro  DateTime?       @default(now()) @db.Timestamp(6)
+  extensiones     extensiones     @relation(fields: [extension_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ge_extension")
+  grupos_atencion grupos_atencion @relation(fields: [grupo_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ge_grupo")
+
+  @@id([grupo_id, extension_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model horarios {
+  id             String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  calendario_id  String      @db.Uuid
+  dia_semana     String      @db.VarChar(10)
+  hora_inicio    DateTime    @db.Time(6)
+  hora_fin       DateTime    @db.Time(6)
+  deleted_at     DateTime?   @db.Timestamp(6)
+  fecha_registro DateTime?   @default(now()) @db.Timestamp(6)
+  calendarios    calendarios @relation(fields: [calendario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_hor_calendario")
+
+  @@unique([calendario_id, dia_semana, hora_inicio, hora_fin], map: "uq_horarios_calendario_dia_hora")
+}
+
+model informacion_negocio {
+  id                  String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id          String    @db.Uuid
+  tema                String    @db.VarChar(100)
+  descripcion         String?
+  deleted_at          DateTime? @db.Timestamp(6)
+  fecha_registro      DateTime? @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime? @default(now()) @db.Timestamp(6)
+  empresas            empresas  @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ib_empresa")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model jobs_async {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id       String    @db.Uuid
+  tipo             String    @db.VarChar(50)
+  payload          Json
+  status           String?   @default("pendiente") @db.VarChar(20)
+  intentos         Int?      @default(0)
+  max_intentos     Int?      @default(3)
+  error_detalle    String?
+  fecha_programada DateTime? @default(now()) @db.Timestamp(6)
+  fecha_inicio     DateTime? @db.Timestamp(6)
+  fecha_fin        DateTime? @db.Timestamp(6)
+  fecha_registro   DateTime? @default(now()) @db.Timestamp(6)
+  empresas         empresas  @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_jobs_empresa")
+
+  @@index([empresa_id, status], map: "idx_jobs_empresa_status")
+  @@index([empresa_id, fecha_registro], map: "idx_jobs_errores", where: raw("((status)::text = 'error'::text)"))
+  @@index([empresa_id, fecha_programada], map: "idx_jobs_pendientes", where: raw("((status)::text = 'pendiente'::text)"))
+}
+
+model listas_extensiones {
+  id                  String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id          String        @db.Uuid
+  clave               String        @db.VarChar(50)
+  descripcion         String?
+  deleted_at          DateTime?     @db.Timestamp(6)
+  fecha_registro      DateTime?     @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime?     @default(now()) @db.Timestamp(6)
+  extensiones         extensiones[]
+  empresas            empresas      @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_le_empresa")
+
+  @@unique([empresa_id, clave], map: "uq_lista_extension_empresa_clave", where: raw("(deleted_at IS NULL)"))
+}
+
+model listas_faq {
+  id                   String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id           String                 @db.Uuid
+  nombre               String                 @db.VarChar(100)
+  descripcion          String?
+  deleted_at           DateTime?              @db.Timestamp(6)
+  fecha_registro       DateTime?              @default(now()) @db.Timestamp(6)
+  fecha_actualizacion  DateTime?              @default(now()) @db.Timestamp(6)
+  empresas             empresas               @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_lf_empresa")
+  preguntas_frecuentes preguntas_frecuentes[]
+
+  @@unique([empresa_id, nombre], map: "uq_lista_faq_empresa_nombre", where: raw("(deleted_at IS NULL)"))
+}
+
+model listas_productos {
+  id                  String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id          String                @db.Uuid
+  clave               String                @db.VarChar(50)
+  descripcion         String?
+  deleted_at          DateTime?             @db.Timestamp(6)
+  fecha_registro      DateTime?             @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime?             @default(now()) @db.Timestamp(6)
+  empresas            empresas              @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_lp_empresa")
+  productos_servicios productos_servicios[]
+
+  @@unique([empresa_id, clave], map: "uq_lista_producto_empresa_clave", where: raw("(deleted_at IS NULL)"))
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model llamadas {
+  id                         String                      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id                 String                      @db.Uuid
+  agente_id                  String?                     @db.Uuid
+  workflow_id                String?                     @db.Uuid
+  cliente_id                 String?                     @db.Uuid
+  pbx_call_id                String?                     @db.VarChar(100)
+  numero_origen              String?                     @db.VarChar(20)
+  numero_destino             String?                     @db.VarChar(20)
+  fecha_inicio               DateTime?                   @db.Timestamp(6)
+  fecha_fin                  DateTime?                   @db.Timestamp(6)
+  duracion_seg               Int?
+  sentimiento_id             String?                     @db.Uuid
+  estado_llamada_id          String?                     @db.Uuid
+  resultado_llamada_id       String?                     @db.Uuid
+  clasificacion_ia           String?                     @db.VarChar(100)
+  transcripcion              String?
+  stt_proveedor_id           String?                     @db.Uuid
+  stt_estado                 String?                     @db.VarChar(30)
+  escalada_humano            Boolean?                    @default(false)
+  extension_destino_id       String?                     @db.Uuid
+  grupo_destino_id           String?                     @db.Uuid
+  metadata                   Json?
+  fecha_registro             DateTime?                   @default(now()) @db.Timestamp(6)
+  auditorias_comandos_ia     auditorias_comandos_ia[]
+  consumo_ia                 consumo_ia[]
+  agentes_virtuales          agentes_virtuales?          @relation(fields: [agente_id], references: [id], onUpdate: NoAction, map: "fk_ll_agente")
+  clientes                   clientes?                   @relation(fields: [cliente_id], references: [id], onUpdate: NoAction, map: "fk_ll_cliente")
+  empresas                   empresas                    @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ll_empresa")
+  catalogo_estado_llamada    catalogo_estado_llamada?    @relation(fields: [estado_llamada_id], references: [id], onUpdate: NoAction, map: "fk_ll_estado")
+  extensiones                extensiones?                @relation(fields: [extension_destino_id], references: [id], onUpdate: NoAction, map: "fk_ll_ext_destino")
+  grupos_atencion            grupos_atencion?            @relation(fields: [grupo_destino_id], references: [id], onUpdate: NoAction, map: "fk_ll_grupo_destino")
+  catalogo_resultado_llamada catalogo_resultado_llamada? @relation(fields: [resultado_llamada_id], references: [id], onUpdate: NoAction, map: "fk_ll_resultado")
+  catalogo_sentimientos      catalogo_sentimientos?      @relation(fields: [sentimiento_id], references: [id], onUpdate: NoAction, map: "fk_ll_sentim")
+  catalogo_proveedores_ia    catalogo_proveedores_ia?    @relation(fields: [stt_proveedor_id], references: [id], onUpdate: NoAction, map: "fk_ll_stt")
+  workflows                  workflows?                  @relation(fields: [workflow_id], references: [id], onUpdate: NoAction, map: "fk_ll_workflow")
+  tickets                    tickets[]
+
+  @@unique([empresa_id, pbx_call_id], map: "uq_llamadas_pbx_call", where: raw("(pbx_call_id IS NOT NULL)"))
+  @@index([empresa_id], map: "idx_llamadas_empresa")
+  @@index([empresa_id, fecha_registro(sort: Desc)], map: "idx_llamadas_empresa_fecha")
+  @@index([fecha_registro], map: "idx_llamadas_fecha")
+  @@index([metadata], map: "idx_llamadas_metadata", type: Gin)
+  @@index([pbx_call_id], map: "idx_llamadas_pbx_call")
+}
+
+model pbx_eventos_raw {
+  id                  BigInt               @id @default(autoincrement())
+  empresa_id          String               @db.Uuid
+  pbx_id              String?              @db.Uuid
+  tipo                String?              @db.VarChar(50)
+  headers             Json?
+  payload             Json
+  procesado           Boolean?             @default(false)
+  fecha               DateTime?            @default(now()) @db.Timestamp(6)
+  empresas            empresas             @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pbxraw_empresa")
+  configuraciones_pbx configuraciones_pbx? @relation(fields: [pbx_id], references: [id], onUpdate: NoAction, map: "fk_pbxraw_pbx")
+
+  @@index([empresa_id], map: "idx_pbxraw_empresa")
+  @@index([empresa_id], map: "idx_pbxraw_no_procesados", where: raw("(procesado = false)"))
+  @@index([payload], map: "idx_pbxraw_payload", type: Gin)
+}
+
+model permisos {
+  id             String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  clave          String           @unique @db.VarChar(100)
+  nombre         String           @db.VarChar(100)
+  descripcion    String?
+  modulo         String?          @db.VarChar(50)
+  deleted_at     DateTime?        @db.Timestamp(6)
+  fecha_registro DateTime?        @default(now()) @db.Timestamp(6)
+  roles_permisos roles_permisos[]
+}
+
+model preguntas_frecuentes {
+  id                      String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  lista_faq_id            String                   @db.Uuid
+  pregunta                String
+  respuesta               String
+  categoria_faq_id        String?                  @db.Uuid
+  deleted_at              DateTime?                @db.Timestamp(6)
+  fecha_registro          DateTime?                @default(now()) @db.Timestamp(6)
+  catalogo_categorias_faq catalogo_categorias_faq? @relation(fields: [categoria_faq_id], references: [id], onUpdate: NoAction, map: "fk_pf_categoria")
+  listas_faq              listas_faq               @relation(fields: [lista_faq_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pf_lista")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model productos_servicios {
+  id                            String                         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  lista_producto_id             String                         @db.Uuid
+  marca                         String?                        @db.VarChar(100)
+  modelo                        String?                        @db.VarChar(100)
+  descripcion                   String?
+  categoria_producto_id         String?                        @db.Uuid
+  precio                        Decimal?                       @db.Decimal(12, 2)
+  deleted_at                    DateTime?                      @db.Timestamp(6)
+  fecha_registro                DateTime?                      @default(now()) @db.Timestamp(6)
+  catalogo_categorias_productos catalogo_categorias_productos? @relation(fields: [categoria_producto_id], references: [id], onUpdate: NoAction, map: "fk_ps_categoria")
+  listas_productos              listas_productos               @relation(fields: [lista_producto_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ps_lista")
+}
+
+model puestos {
+  id             String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id     String        @db.Uuid
+  nombre         String        @db.VarChar(100)
+  deleted_at     DateTime?     @db.Timestamp(6)
+  fecha_registro DateTime?     @default(now()) @db.Timestamp(6)
+  extensiones    extensiones[]
+  empresas       empresas      @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_puestos_empresa")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model reglas_workflow {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workflow_id    String    @db.Uuid
+  condicion      Json
+  accion         Json
+  prioridad      Int?      @default(1)
+  deleted_at     DateTime? @db.Timestamp(6)
+  fecha_registro DateTime? @default(now()) @db.Timestamp(6)
+  workflows      workflows @relation(fields: [workflow_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_rw_workflow")
+
+  @@index([accion], map: "idx_reglas_accion", type: Gin)
+  @@index([condicion], map: "idx_reglas_condicion", type: Gin)
+}
+
+model roles_permisos {
+  rol_id         String         @db.Uuid
+  permiso_id     String         @db.Uuid
+  fecha_registro DateTime?      @default(now()) @db.Timestamp(6)
+  permisos       permisos       @relation(fields: [permiso_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_rp_permiso")
+  catalogo_roles catalogo_roles @relation(fields: [rol_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_rp_rol")
+
+  @@id([rol_id, permiso_id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sesiones {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  usuario_id       String    @db.Uuid
+  token_hash       String    @db.VarChar(255)
+  ip               String?   @db.VarChar(45)
+  dispositivo      String?
+  activo           Boolean?  @default(true)
+  fecha_inicio     DateTime? @default(now()) @db.Timestamp(6)
+  fecha_expiracion DateTime? @db.Timestamp(6)
+  usuarios         usuarios  @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sesiones_usuario")
+
+  @@index([usuario_id], map: "idx_sesiones_usuario", where: raw("(activo = true)"))
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sincronizaciones_pbx {
+  id                  String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id          String               @db.Uuid
+  pbx_id              String?              @db.Uuid
+  endpoint            String?              @db.VarChar(200)
+  status              String               @db.VarChar(20)
+  duracion_ms         Int?
+  errores             Json?
+  fecha_sync          DateTime?            @default(now()) @db.Timestamp(6)
+  empresas            empresas             @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sync_empresa")
+  configuraciones_pbx configuraciones_pbx? @relation(fields: [pbx_id], references: [id], onUpdate: NoAction, map: "fk_sync_pbx")
+}
+
+model sucursales {
+  id                  String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id          String              @db.Uuid
+  nombre              String              @db.VarChar(100)
+  direccion           String?
+  telefono            String?             @db.VarChar(20)
+  correo              String?             @db.Citext
+  deleted_at          DateTime?           @db.Timestamp(6)
+  fecha_registro      DateTime?           @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime?           @default(now()) @db.Timestamp(6)
+  agentes_virtuales   agentes_virtuales[]
+  departamentos       departamentos[]
+  extensiones         extensiones[]
+  empresas            empresas            @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_suc_empresa")
+}
+
+model telefonos_cliente {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  cliente_id     String    @db.Uuid
+  telefono       String    @db.VarChar(20)
+  es_principal   Boolean?  @default(false)
+  fecha_registro DateTime? @default(now()) @db.Timestamp(6)
+  clientes       clientes  @relation(fields: [cliente_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tel_cliente")
+
+  @@unique([cliente_id, telefono], map: "uq_telefonos_cliente_cliente_telefono")
+}
+
+model ticket_comentarios {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticket_id      String    @db.Uuid
+  usuario_id     String    @db.Uuid
+  comentario     String
+  fecha_registro DateTime? @default(now()) @db.Timestamp(6)
+  tickets        tickets   @relation(fields: [ticket_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tc_ticket")
+  usuarios       usuarios  @relation(fields: [usuario_id], references: [id], onUpdate: NoAction, map: "fk_tc_usuario")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model tickets {
+  id                        String                     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id                String                     @db.Uuid
+  llamada_id                String?                    @db.Uuid
+  cliente_id                String?                    @db.Uuid
+  usuario_responsable_id    String?                    @db.Uuid
+  departamento_id           String?                    @db.Uuid
+  titulo                    String                     @db.VarChar(200)
+  descripcion               String?
+  estado_ticket_id          String?                    @db.Uuid
+  prioridad_ticket_id       String?                    @db.Uuid
+  deleted_at                DateTime?                  @db.Timestamp(6)
+  fecha_creacion            DateTime?                  @default(now()) @db.Timestamp(6)
+  fecha_cierre              DateTime?                  @db.Timestamp(6)
+  ticket_comentarios        ticket_comentarios[]
+  clientes                  clientes?                  @relation(fields: [cliente_id], references: [id], onUpdate: NoAction, map: "fk_tk_cliente")
+  departamentos             departamentos?             @relation(fields: [departamento_id], references: [id], onUpdate: NoAction, map: "fk_tk_depto")
+  empresas                  empresas                   @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tk_empresa")
+  catalogo_estado_ticket    catalogo_estado_ticket?    @relation(fields: [estado_ticket_id], references: [id], onUpdate: NoAction, map: "fk_tk_estado")
+  llamadas                  llamadas?                  @relation(fields: [llamada_id], references: [id], onUpdate: NoAction, map: "fk_tk_llamada")
+  catalogo_prioridad_ticket catalogo_prioridad_ticket? @relation(fields: [prioridad_ticket_id], references: [id], onUpdate: NoAction, map: "fk_tk_prioridad")
+  usuarios                  usuarios?                  @relation(fields: [usuario_responsable_id], references: [id], onUpdate: NoAction, map: "fk_tk_usuario")
+
+  @@index([empresa_id], map: "idx_tickets_empresa")
+  @@index([empresa_id, estado_ticket_id], map: "idx_tickets_empresa_estado")
+}
+
+model usuario_extensiones {
+  usuario_id     String      @unique(map: "uq_usuario_extension_principal", where: raw("(es_principal = true)")) @db.Uuid
+  extension_id   String      @db.Uuid
+  es_principal   Boolean?    @default(false)
+  fecha_registro DateTime?   @default(now()) @db.Timestamp(6)
+  extensiones    extensiones @relation(fields: [extension_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ue_extension")
+  usuarios       usuarios    @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ue_usuario")
+
+  @@id([usuario_id, extension_id])
+}
+
+model usuario_roles {
+  usuario_id     String         @db.Uuid
+  rol_id         String         @db.Uuid
+  fecha_registro DateTime?      @default(now()) @db.Timestamp(6)
+  catalogo_roles catalogo_roles @relation(fields: [rol_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ur_rol")
+  usuarios       usuarios       @relation(fields: [usuario_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ur_usuario")
+
+  @@id([usuario_id, rol_id])
+}
+
+model usuarios {
+  id                      String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id              String                   @db.Uuid
+  nombre                  String                   @db.VarChar(100)
+  usuario                 String                   @db.VarChar(50)
+  correo                  String                   @db.Citext
+  password_hash           String                   @db.VarChar(255)
+  telefono_2fa            String?                  @db.VarChar(20)
+  estado_usuario_id       String?                  @db.Uuid
+  ultimo_acceso           DateTime?                @db.Timestamp(6)
+  deleted_at              DateTime?                @db.Timestamp(6)
+  fecha_registro          DateTime?                @default(now()) @db.Timestamp(6)
+  fecha_actualizacion     DateTime?                @default(now()) @db.Timestamp(6)
+  auditoria_logs          auditoria_logs[]
+  auditorias_comandos_ia  auditorias_comandos_ia[]
+  eventos_agenda          eventos_agenda[]
+  sesiones                sesiones[]
+  ticket_comentarios      ticket_comentarios[]
+  tickets                 tickets[]
+  usuario_extensiones     usuario_extensiones?
+  usuario_roles           usuario_roles[]
+  empresas                empresas                 @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_usuarios_empresa")
+  catalogo_estado_usuario catalogo_estado_usuario? @relation(fields: [estado_usuario_id], references: [id], onUpdate: NoAction, map: "fk_usuarios_estado")
+  versiones_prompt        versiones_prompt[]
+  workflow_versiones      workflow_versiones[]
+
+  @@unique([empresa_id, correo], map: "uq_usuarios_empresa_correo", where: raw("(deleted_at IS NULL)"))
+  @@unique([empresa_id, usuario], map: "uq_usuarios_usuario", where: raw("(deleted_at IS NULL)"))
+  @@index([empresa_id, correo], map: "idx_usuarios_correo", where: raw("(deleted_at IS NULL)"))
+  @@index([empresa_id], map: "idx_usuarios_empresa")
+  @@index([empresa_id, usuario], map: "idx_usuarios_login", where: raw("(deleted_at IS NULL)"))
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model versiones_prompt {
+  id                 String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  agente_virtual_id  String            @unique(map: "uq_prompt_activo", where: raw("(es_activa = true)")) @db.Uuid
+  usuario_id         String            @db.Uuid
+  version            Int               @default(1)
+  prompt             String
+  descripcion_cambio String?
+  es_activa          Boolean?          @default(false)
+  fecha_registro     DateTime?         @default(now()) @db.Timestamp(6)
+  agentes_virtuales  agentes_virtuales @relation(fields: [agente_virtual_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_vp_agente")
+  usuarios           usuarios          @relation(fields: [usuario_id], references: [id], onUpdate: NoAction, map: "fk_vp_usuario")
+
+  @@unique([agente_virtual_id, version], map: "uq_versiones_prompt_agente_version")
+  @@index([agente_virtual_id, fecha_registro(sort: Desc)], map: "idx_versiones_agente")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model workflow_versiones {
+  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workflow_id        String    @unique(map: "uq_workflow_activo", where: raw("(es_activa = true)")) @db.Uuid
+  usuario_id         String    @db.Uuid
+  version            Int       @default(1)
+  configuracion      Json
+  descripcion_cambio String?
+  es_activa          Boolean?  @default(false)
+  fecha_registro     DateTime? @default(now()) @db.Timestamp(6)
+  usuarios           usuarios  @relation(fields: [usuario_id], references: [id], onUpdate: NoAction, map: "fk_wv_usuario")
+  workflows          workflows @relation(fields: [workflow_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wv_workflow")
+
+  @@unique([workflow_id, version], map: "uq_workflow_versiones_workflow_version")
+}
+
+model workflows {
+  id                       String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  empresa_id               String                    @db.Uuid
+  nombre                   String                    @db.VarChar(100)
+  descripcion              String?
+  estado_workflow_id       String?                   @db.Uuid
+  configuracion            Json?
+  deleted_at               DateTime?                 @db.Timestamp(6)
+  fecha_registro           DateTime?                 @default(now()) @db.Timestamp(6)
+  fecha_actualizacion      DateTime?                 @default(now()) @db.Timestamp(6)
+  llamadas                 llamadas[]
+  reglas_workflow          reglas_workflow[]
+  workflow_versiones       workflow_versiones?
+  empresas                 empresas                  @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wf_empresa")
+  catalogo_estado_workflow catalogo_estado_workflow? @relation(fields: [estado_workflow_id], references: [id], onUpdate: NoAction, map: "fk_wf_estado")
+
+  @@unique([empresa_id, nombre], map: "uq_workflow_empresa_nombre", where: raw("(deleted_at IS NULL)"))
+  @@index([configuracion], map: "idx_wf_configuracion", type: Gin)
+}
