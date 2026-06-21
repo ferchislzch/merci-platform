@@ -297,6 +297,7 @@ model configuraciones_empresa {
   modelo_ia                                                                                 String?                  @default("gpt-4o") @db.VarChar(50)
   temperatura_modelo                                                                        Decimal?                 @default(0.7) @db.Decimal(3, 2)
   metadata                                                                                  Json?
+  fecha_registro                                                                            DateTime?                @default(now()) @db.Timestamp(6)
   fecha_actualizacion                                                                       DateTime?                @default(now()) @db.Timestamp(6)
   empresas                                                                                  empresas                 @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ce_empresa")
   catalogo_proveedores_ia_configuraciones_empresa_proveedor_llm_idTocatalogo_proveedores_ia catalogo_proveedores_ia? @relation("configuraciones_empresa_proveedor_llm_idTocatalogo_proveedores_ia", fields: [proveedor_llm_id], references: [id], onUpdate: NoAction, map: "fk_ce_llm")
@@ -506,6 +507,8 @@ model grupos_atencion {
   catalogo_tipo_transferencia catalogo_tipo_transferencia? @relation(fields: [tipo_transferencia_id], references: [id], onUpdate: NoAction, map: "fk_ga_transferencia")
   grupos_extensiones          grupos_extensiones[]
   llamadas                    llamadas[]
+
+  @@unique([empresa_id, clave], map: "uq_grupo_empresa_clave", where: raw("(deleted_at IS NULL)"))
 }
 
 model grupos_extensiones {
@@ -554,6 +557,8 @@ model jobs_async {
   intentos         Int?      @default(0)
   max_intentos     Int?      @default(3)
   error_detalle    String?
+  worker_id        String?   @db.VarChar(100)
+  locked_at        DateTime? @db.Timestamp(6)
   fecha_programada DateTime? @default(now()) @db.Timestamp(6)
   fecha_inicio     DateTime? @db.Timestamp(6)
   fecha_fin        DateTime? @db.Timestamp(6)
@@ -563,6 +568,8 @@ model jobs_async {
   @@index([empresa_id, status], map: "idx_jobs_empresa_status")
   @@index([empresa_id, fecha_registro], map: "idx_jobs_errores", where: raw("((status)::text = 'error'::text)"))
   @@index([empresa_id, fecha_programada], map: "idx_jobs_pendientes", where: raw("((status)::text = 'pendiente'::text)"))
+  @@index([empresa_id, fecha_programada, status], map: "idx_jobs_pendientes_lock", where: raw("((status)::text = 'pendiente'::text)"))
+  @@index([worker_id, locked_at], map: "idx_jobs_worker", where: raw("((status)::text = 'procesando'::text)"))
 }
 
 model listas_extensiones {
