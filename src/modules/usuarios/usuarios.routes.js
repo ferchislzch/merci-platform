@@ -44,4 +44,10 @@ router.patch(
   usuariosController.asignarRoles
 )
 
+router.patch(
+  '/:id/desbloquear',
+  requirePermission('usuarios.editar'),
+  usuariosController.desbloquear
+)
+
 module.exports = router

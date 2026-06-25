@@ -16,7 +16,7 @@ const generalLimiter = rateLimit({
 // Límite estricto solo para login
 // Evita ataques de fuerza bruta sobre credenciales
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
+    windowMs: 1 * 60 * 1000, // 15 minutos
     max: 10,                   // solo 10 intentos de login por IP
     standardHeaders: true,
     legacyHeaders: false,

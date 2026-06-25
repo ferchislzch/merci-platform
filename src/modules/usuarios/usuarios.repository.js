@@ -168,6 +168,53 @@ const reemplazarRoles = ({ usuarioId, rolesIds }) => {
   ])
 }
 
+const limpiarIntentosDeUsuario = ({ usuarioId, empresaId }) => {
+  return prisma.intentos_login.deleteMany({
+    where: {
+      usuario_id: usuarioId,
+      empresa_id: empresaId,
+    },
+  })
+}
+
+/**
+ * Devuelve el Set de usuario_ids bloqueados dentro de una empresa.
+ * Un usuario está bloqueado si tiene >= 5 intentos fallidos en los últimos 15 min.
+ * Usado por listar() en el service para agregar bloqueado: true/false a cada usuario.
+ */
+const obtenerUsuariosBloqueados = async ({ empresaId }) => {
+  const desde = new Date(Date.now() - 15 * 60 * 1000)
+  const grupos = await prisma.intentos_login.groupBy({
+    by:    ['usuario_id'],
+    where: {
+      empresa_id: empresaId,
+      fecha:      { gte: desde },
+      usuario_id: { not: null },
+    },
+    _count: { usuario_id: true },
+    having: {
+      usuario_id: { _count: { gte: 5 } },
+    },
+  })
+  return new Set(grupos.map((g) => g.usuario_id))
+}
+
+/**
+ * Verifica si un usuario específico está bloqueado.
+ * Usado por obtenerPorId() para incluir bloqueado: true/false en el detalle.
+ */
+const estaBloqueado = async ({ usuarioId, empresaId }) => {
+  const desde = new Date(Date.now() - 15 * 60 * 1000)
+  const count = await prisma.intentos_login.count({
+    where: {
+      usuario_id: usuarioId,
+      empresa_id: empresaId,
+      fecha:      { gte: desde },
+    },
+  })
+  return count >= 5
+}
+
 module.exports = {
   listar,
   buscarPorId,
@@ -177,4 +224,7 @@ module.exports = {
   eliminar,
   obtenerEstadoActivo,
   reemplazarRoles,
+  limpiarIntentosDeUsuario,
+  obtenerUsuariosBloqueados,
+  estaBloqueado,
 }

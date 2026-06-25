@@ -7,11 +7,6 @@ const audit = require('../../services/audit.service')
 
 // ─── Helpers internos ────────────────────────────────────────────────────────
 
-/**
- * Valida que la contraseña cumpla los requisitos mínimos:
- * al menos 8 caracteres, una mayúscula, un número.
- * El documento de diseño los lista como obligatorios.
- */
 const validarPassword = (password) => {
   if (!password || password.length < 8) {
     throw new AppError('La contraseña debe tener al menos 8 caracteres', 400)
@@ -24,10 +19,6 @@ const validarPassword = (password) => {
   }
 }
 
-/**
- * Formatea la respuesta de un usuario para no exponer password_hash
- * ni datos internos que el frontend no necesita.
- */
 const formatearUsuario = (usuario) => ({
   usuarioId: usuario.id,
   nombre: usuario.nombre,
@@ -45,28 +36,34 @@ const formatearUsuario = (usuario) => ({
 // ─── Casos de uso ─────────────────────────────────────────────────────────────
 
 const listar = async ({ empresaId, busqueda }) => {
-  const usuarios = await usuariosRepository.listar({ empresaId, busqueda })
-  return usuarios.map(formatearUsuario)
+  const [usuarios, bloqueados] = await Promise.all([
+    usuariosRepository.listar({ empresaId, busqueda }),
+    usuariosRepository.obtenerUsuariosBloqueados({ empresaId }),
+  ])
+  return usuarios.map((u) => ({
+    ...formatearUsuario(u),
+    bloqueado: bloqueados.has(u.id),
+  }))
 }
 
 const obtenerPorId = async ({ usuarioId, empresaId }) => {
-  const usuario = await usuariosRepository.buscarPorId({ usuarioId, empresaId })
+  const [usuario, bloqueado] = await Promise.all([
+    usuariosRepository.buscarPorId({ usuarioId, empresaId }),
+    usuariosRepository.estaBloqueado({ usuarioId, empresaId }),
+  ])
   if (!usuario) throw new NotFoundError('Usuario')
-  return formatearUsuario(usuario)
+  return { ...formatearUsuario(usuario), bloqueado }
 }
 
 const crear = async ({ empresaId, nombre, usuario, correo, password }, { usuarioId: adminId, ip }) => {
-  // Validar contraseña antes de hashear
   validarPassword(password)
 
-  // Verificar duplicado de usuario o correo en la misma empresa
   const duplicado = await usuariosRepository.existeDuplicado({ empresaId, usuario, correo })
   if (duplicado) {
     const campo = duplicado.usuario === usuario ? 'nombre de usuario' : 'correo'
     throw new AppError(`Ya existe un usuario con ese ${campo} en esta empresa`, 409)
   }
 
-  // Obtener estado 'Activo' del catálogo
   const estadoActivo = await usuariosRepository.obtenerEstadoActivo()
   if (!estadoActivo) {
     throw new AppError('No se encontró el estado Activo en el catálogo', 500)
@@ -98,11 +95,9 @@ const crear = async ({ empresaId, nombre, usuario, correo, password }, { usuario
 }
 
 const editar = async ({ usuarioId, empresaId, nombre, correo, estadoUsuarioId }, { usuarioId: adminId, ip }) => {
-  // Verificar que el usuario existe en esta empresa
   const usuarioActual = await usuariosRepository.buscarPorId({ usuarioId, empresaId })
   if (!usuarioActual) throw new NotFoundError('Usuario')
 
-  // Verificar que el correo nuevo no esté en uso por otro usuario de la misma empresa
   if (correo && correo !== usuarioActual.correo) {
     const duplicado = await usuariosRepository.existeDuplicado({
       empresaId,
@@ -113,7 +108,6 @@ const editar = async ({ usuarioId, empresaId, nombre, correo, estadoUsuarioId },
     if (duplicado) throw new AppError('Ya existe un usuario con ese correo en esta empresa', 409)
   }
 
-  // Solo actualizamos los campos que llegaron en el body
   const datos = {}
   if (nombre) datos.nombre = nombre
   if (correo) datos.correo = correo
@@ -148,7 +142,6 @@ const eliminar = async ({ usuarioId, empresaId }, { usuarioId: adminId, ip }) =>
   const usuario = await usuariosRepository.buscarPorId({ usuarioId, empresaId })
   if (!usuario) throw new NotFoundError('Usuario')
 
-  // No permitir que un admin se elimine a sí mismo
   if (usuarioId === adminId) {
     throw new AppError('No puedes eliminar tu propio usuario', 400)
   }
@@ -167,11 +160,6 @@ const eliminar = async ({ usuarioId, empresaId }, { usuarioId: adminId, ip }) =>
   })
 }
 
-/**
- * Reemplaza los roles de un usuario.
- * Valida que todos los rolesIds pertenezcan a la misma empresa
- * antes de asignarlos — no se pueden asignar roles de otra empresa.
- */
 const asignarRoles = async ({ usuarioId, empresaId, rolesIds }, { usuarioId: adminId, ip }) => {
   if (!Array.isArray(rolesIds) || rolesIds.length === 0) {
     throw new AppError('Debes proporcionar al menos un rol', 400)
@@ -180,7 +168,6 @@ const asignarRoles = async ({ usuarioId, empresaId, rolesIds }, { usuarioId: adm
   const usuario = await usuariosRepository.buscarPorId({ usuarioId, empresaId })
   if (!usuario) throw new NotFoundError('Usuario')
 
-  // Verificar que los roles pertenecen a esta empresa
   const rolesValidos = await rolesRepository.verificarRolesDeLaEmpresa({
     empresaId,
     rolesIds,
@@ -204,4 +191,40 @@ const asignarRoles = async ({ usuarioId, empresaId, rolesIds }, { usuarioId: adm
   })
 }
 
-module.exports = { listar, obtenerPorId, crear, editar, eliminar, asignarRoles }
+// ─── NUEVO — desbloqueo manual por Admin ──────────────────────────────────────
+
+/**
+ * Desbloquea un usuario eliminando sus intentos fallidos de login.
+ * Solo puede ejecutarlo un Admin de empresa con permiso usuarios.editar.
+ * El desbloqueo automático ocurre en auth.service.js por lazy eval
+ * al cumplirse los 15 min — este es el camino manual.
+ */
+const desbloquear = async ({ usuarioId, empresaId }, { usuarioId: adminId, ip }) => {
+  // Verificar que el usuario existe en esta empresa
+  const usuario = await usuariosRepository.buscarPorId({ usuarioId, empresaId })
+  if (!usuario) throw new NotFoundError('Usuario')
+
+  // Limpiar todos los intentos fallidos — el usuario puede volver a intentar
+  await usuariosRepository.limpiarIntentosDeUsuario({ usuarioId, empresaId })
+
+  await audit.log({
+    usuarioId: adminId,
+    empresaId,
+    ip,
+    modulo: 'usuarios',
+    accion: 'UPDATE',
+    tabla: 'intentos_login',
+    registroId: usuarioId,
+    datosNuevos: { accion: 'desbloqueo_manual', usuarioDesbloqueado: usuario.usuario },
+  })
+}
+
+module.exports = {
+  listar,
+  obtenerPorId,
+  crear,
+  editar,
+  eliminar,
+  asignarRoles,
+  desbloquear, // ← NUEVO
+}

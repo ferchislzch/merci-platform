@@ -95,4 +95,16 @@ const asignarRoles = async (req, res, next) => {
   }
 }
 
-module.exports = { listar, obtenerPorId, crear, editar, eliminar, asignarRoles }
+const desbloquear = async (req, res, next) => {
+  try {
+    await usuariosService.desbloquear(
+      { usuarioId: req.params.id, empresaId: req.empresaId },
+      { usuarioId: req.user.usuarioId, ip: req.ip }
+    )
+    res.json({ ok: true, mensaje: 'Usuario desbloqueado correctamente' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = { listar, obtenerPorId, crear, editar, eliminar, asignarRoles, desbloquear }

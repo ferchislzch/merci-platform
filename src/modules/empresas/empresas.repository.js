@@ -1,3 +1,5 @@
+'use strict'
+
 const prisma = require('../../config/database')
 
 const listar = () => {
@@ -11,6 +13,7 @@ const listar = () => {
       telefono: true,
       correo: true,
       status: true,
+      codigo_acceso: true, // ← NUEVO
       fecha_registro: true,
       fecha_actualizacion: true,
     },
@@ -29,21 +32,40 @@ const buscarPorId = ({ empresaId }) => {
       telefono: true,
       correo: true,
       status: true,
+      codigo_acceso: true, // ← NUEVO
       fecha_registro: true,
       fecha_actualizacion: true,
     },
   })
 }
 
-const crear = ({ nombre_comercial, razon_social, rfc, telefono, correo }) => {
+// ── NUEVO: verificar si un código ya existe ────────────────────────────────────
+const buscarPorCodigo = (codigoAcceso) => {
+  return prisma.empresas.findFirst({
+    where: { codigo_acceso: codigoAcceso, deleted_at: null },
+    select: { id: true },
+  })
+}
+
+// ── ACTUALIZADO: acepta codigoAcceso ─────────────────────────────────────────
+const crear = ({ nombre_comercial, razon_social, rfc, telefono, correo, codigoAcceso }) => {
   return prisma.empresas.create({
-    data: { nombre_comercial, razon_social, rfc, telefono, correo, status: 'activo' },
+    data: {
+      nombre_comercial,
+      razon_social,
+      rfc,
+      telefono,
+      correo,
+      status:        'activo',
+      codigo_acceso: codigoAcceso, // ← NUEVO
+    },
     select: {
       id: true,
       nombre_comercial: true,
       razon_social: true,
       rfc: true,
       status: true,
+      codigo_acceso: true, // ← NUEVO
       fecha_registro: true,
     },
   })
@@ -61,16 +83,11 @@ const editar = ({ empresaId, datos }) => {
       telefono: true,
       correo: true,
       status: true,
+      codigo_acceso: true, // ← NUEVO
     },
   })
 }
 
-/**
- * Soft delete de empresa — marca deleted_at.
- * Todos los datos relacionados (usuarios, agentes, llamadas, etc.)
- * siguen existiendo en BD por el CASCADE que solo aplica si se borra
- * la fila real. El soft delete los deja intactos.
- */
 const eliminar = ({ empresaId }) => {
   return prisma.empresas.update({
     where: { id: empresaId },
@@ -86,4 +103,4 @@ const cambiarStatus = ({ empresaId, status }) => {
   })
 }
 
-module.exports = { listar, buscarPorId, crear, editar, eliminar, cambiarStatus }
+module.exports = { listar, buscarPorId, buscarPorCodigo, crear, editar, eliminar, cambiarStatus }
