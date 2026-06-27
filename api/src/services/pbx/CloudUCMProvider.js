@@ -199,6 +199,37 @@ class CloudUCMProvider extends IPBXProvider {
         return Buffer.from(res.data)
     }
 
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    async uploadPrompt(empresaId, filename, audioBuffer) {
+        await this._ensureSession(empresaId)
+        
+        // Se usa FormData porque la API del UCM requiere multipart/form-data para archivos
+        const FormData = require('form-data');
+        const form = new FormData();
+        form.append('action', 'uploadfile');
+        form.append('type', 'ivrprompt');
+        form.append('filename', audioBuffer, { filename, contentType: 'audio/wav' });
+
+        const res = await axios.post(`${this.baseUrl}/cgi`, form, {
+            headers: { 
+                ...form.getHeaders(),
+                Cookie: this.cookie 
+            },
+            httpsAgent
+        });
+        return res.data;
+    }
+
+    /**
+     * Reproduce un Custom Prompt en una llamada activa
+     */
+    async playPrompt(empresaId, callId, filename) {
+        await this._ensureSession(empresaId)
+        // La acción playprompt o ivrplay depende de la versión del firmware del UCM
+        return this._request('playprompt', { callid: callId, prompt: filename });
+    }
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    
     /**
      * Verifica que la conexión sigue activa
      * @param {string} empresaId

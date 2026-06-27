@@ -66,6 +66,7 @@ model auditorias_comandos_ia {
   usuario_id         String?   @db.Uuid
   llamada_id         String?   @db.Uuid
   comando_voz_puro   String
+  respuesta_ia_puro  String?
   json_deducido      Json?
   tokens_consumidos  Int?
   status_resultado   String    @db.VarChar(20)
@@ -631,6 +632,9 @@ model llamadas {
   transcripcion              String?
   stt_proveedor_id           String?                     @db.Uuid
   stt_estado                 String?                     @db.VarChar(30)
+  respuesta_ia               String?
+  llm_estado                 String?                     @db.VarChar(30)
+  tts_estado                 String?                     @db.VarChar(30)
   escalada_humano            Boolean?                    @default(false)
   extension_destino_id       String?                     @db.Uuid
   grupo_destino_id           String?                     @db.Uuid
