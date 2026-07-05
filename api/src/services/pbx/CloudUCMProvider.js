@@ -245,4 +245,4 @@ class CloudUCMProvider extends IPBXProvider {
     }
 }
 
-module.exports = CloudUCMProvid
+module.exports = CloudUCMProvider

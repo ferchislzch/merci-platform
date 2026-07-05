@@ -1,15 +1,15 @@
 generator client {
   provider        = "prisma-client-js"
-  output          = "../generated/prisma"
-  previewFeatures = ["partialIndexes"]
+  previewFeatures = ["partialIndexes", "postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [citext]
 }
 
 model agentes_virtuales {
-  id                        String                  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                        String                  @id @default(uuid()) @db.Uuid
   empresa_id                String                  @db.Uuid
   departamento_id           String?                 @db.Uuid
   sucursal_id               String?                 @db.Uuid
@@ -80,7 +80,7 @@ model auditorias_comandos_ia {
 }
 
 model calendarios {
-  id                  String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String              @id @default(uuid()) @db.Uuid
   empresa_id          String              @db.Uuid
   nombre              String              @db.VarChar(100)
   descripcion         String?
@@ -96,7 +96,7 @@ model calendarios {
 }
 
 model catalogo_categorias_faq {
-  id                   String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                   String                 @id @default(uuid()) @db.Uuid
   empresa_id           String                 @db.Uuid
   nombre               String                 @db.VarChar(100)
   descripcion          String?
@@ -109,7 +109,7 @@ model catalogo_categorias_faq {
 }
 
 model catalogo_categorias_productos {
-  id                  String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String                @id @default(uuid()) @db.Uuid
   empresa_id          String                @db.Uuid
   nombre              String                @db.VarChar(100)
   descripcion         String?
@@ -122,28 +122,28 @@ model catalogo_categorias_productos {
 }
 
 model catalogo_estado_agente {
-  id                String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                String              @id @default(uuid()) @db.Uuid
   nombre            String              @db.VarChar(50)
   deleted_at        DateTime?           @db.Timestamp(6)
   agentes_virtuales agentes_virtuales[]
 }
 
 model catalogo_estado_extension {
-  id          String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id          String        @id @default(uuid()) @db.Uuid
   nombre      String        @db.VarChar(50)
   deleted_at  DateTime?     @db.Timestamp(6)
   extensiones extensiones[]
 }
 
 model catalogo_estado_llamada {
-  id         String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id         String     @id @default(uuid()) @db.Uuid
   nombre     String     @db.VarChar(50)
   deleted_at DateTime?  @db.Timestamp(6)
   llamadas   llamadas[]
 }
 
 model catalogo_estado_ticket {
-  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
   nombre      String    @db.VarChar(50)
   descripcion String?
   deleted_at  DateTime? @db.Timestamp(6)
@@ -151,14 +151,14 @@ model catalogo_estado_ticket {
 }
 
 model catalogo_estado_usuario {
-  id         String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id         String     @id @default(uuid()) @db.Uuid
   nombre     String     @db.VarChar(50)
   deleted_at DateTime?  @db.Timestamp(6)
   usuarios   usuarios[]
 }
 
 model catalogo_estado_workflow {
-  id          String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id          String      @id @default(uuid()) @db.Uuid
   nombre      String      @db.VarChar(50)
   descripcion String?
   deleted_at  DateTime?   @db.Timestamp(6)
@@ -166,7 +166,7 @@ model catalogo_estado_workflow {
 }
 
 model catalogo_prioridad_ticket {
-  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
   nombre      String    @db.VarChar(50)
   descripcion String?
   deleted_at  DateTime? @db.Timestamp(6)
@@ -175,7 +175,7 @@ model catalogo_prioridad_ticket {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model catalogo_proveedores_ia {
-  id                                                                                        String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                                                                                        String                    @id @default(uuid()) @db.Uuid
   nombre                                                                                    String                    @db.VarChar(100)
   tipo                                                                                      String                    @db.VarChar(20)
   deleted_at                                                                                DateTime?                 @db.Timestamp(6)
@@ -187,7 +187,7 @@ model catalogo_proveedores_ia {
 }
 
 model catalogo_resultado_llamada {
-  id         String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id         String     @id @default(uuid()) @db.Uuid
   nombre     String     @db.VarChar(50)
   deleted_at DateTime?  @db.Timestamp(6)
   llamadas   llamadas[]
@@ -195,7 +195,7 @@ model catalogo_resultado_llamada {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model catalogo_roles {
-  id                  String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String           @id @default(uuid()) @db.Uuid
   empresa_id          String?          @db.Uuid
   nombre              String           @unique(map: "uq_roles_global_nombre", where: raw("((empresa_id IS NULL) AND (deleted_at IS NULL))")) @db.VarChar(50)
   descripcion         String?
@@ -211,14 +211,14 @@ model catalogo_roles {
 }
 
 model catalogo_sentimientos {
-  id         String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id         String     @id @default(uuid()) @db.Uuid
   nombre     String     @db.VarChar(50)
   deleted_at DateTime?  @db.Timestamp(6)
   llamadas   llamadas[]
 }
 
 model catalogo_tipo_agente {
-  id                String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                String              @id @default(uuid()) @db.Uuid
   empresa_id        String              @db.Uuid
   nombre            String              @db.VarChar(100)
   descripcion       String?
@@ -229,7 +229,7 @@ model catalogo_tipo_agente {
 }
 
 model catalogo_tipo_documento_ia {
-  id            String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id            String          @id @default(uuid()) @db.Uuid
   nombre        String          @db.VarChar(50)
   descripcion   String?
   deleted_at    DateTime?       @db.Timestamp(6)
@@ -237,7 +237,7 @@ model catalogo_tipo_documento_ia {
 }
 
 model catalogo_tipo_evento {
-  id                  String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String                @id @default(uuid()) @db.Uuid
   clave               String                @unique @db.VarChar(50)
   nombre              String                @db.VarChar(100)
   descripcion         String?
@@ -246,7 +246,7 @@ model catalogo_tipo_evento {
 }
 
 model catalogo_tipo_transferencia {
-  id              String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id              String            @id @default(uuid()) @db.Uuid
   empresa_id      String            @db.Uuid
   nombre          String            @db.VarChar(50)
   descripcion     String?
@@ -259,7 +259,7 @@ model catalogo_tipo_transferencia {
 }
 
 model catalogo_tipo_visibilidad {
-  id          String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id          String        @id @default(uuid()) @db.Uuid
   nombre      String        @db.VarChar(50)
   descripcion String?
   deleted_at  DateTime?     @db.Timestamp(6)
@@ -267,7 +267,7 @@ model catalogo_tipo_visibilidad {
 }
 
 model clientes {
-  id                  String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String              @id @default(uuid()) @db.Uuid
   empresa_id          String              @db.Uuid
   nombre              String              @db.VarChar(100)
   apellido            String?             @db.VarChar(100)
@@ -286,7 +286,7 @@ model clientes {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model configuraciones_empresa {
-  id                                                                                        String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                                                                                        String                   @id @default(uuid()) @db.Uuid
   empresa_id                                                                                String                   @unique @db.Uuid
   voz_ia                                                                                    String?                  @db.VarChar(50)
   idioma                                                                                    String?                  @default("es") @db.VarChar(10)
@@ -307,7 +307,7 @@ model configuraciones_empresa {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model configuraciones_pbx {
-  id                   String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                   String                 @id @default(uuid()) @db.Uuid
   empresa_id           String                 @db.Uuid
   proveedor            String                 @default("grandstream") @db.VarChar(50)
   api_url              String
@@ -325,7 +325,7 @@ model configuraciones_pbx {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model consumo_ia {
-  id                      String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                      String                   @id @default(uuid()) @db.Uuid
   empresa_id              String                   @db.Uuid
   llamada_id              String?                  @db.Uuid
   proveedor_id            String?                  @db.Uuid
@@ -341,7 +341,7 @@ model consumo_ia {
 }
 
 model departamentos {
-  id                  String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String              @id @default(uuid()) @db.Uuid
   sucursal_id         String              @db.Uuid
   nombre              String              @db.VarChar(100)
   deleted_at          DateTime?           @db.Timestamp(6)
@@ -354,7 +354,7 @@ model departamentos {
 }
 
 model documentos_ia {
-  id                         String                      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                         String                      @id @default(uuid()) @db.Uuid
   empresa_id                 String                      @db.Uuid
   titulo                     String                      @db.VarChar(200)
   contenido                  String?
@@ -367,7 +367,7 @@ model documentos_ia {
 }
 
 model emails_cliente {
-  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
   cliente_id     String    @db.Uuid
   correo         String    @db.Citext
   es_principal   Boolean?  @default(false)
@@ -380,7 +380,7 @@ model emails_cliente {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model empresas {
-  id                            String                          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                            String                          @id @default(uuid()) @db.Uuid
   nombre_comercial              String                          @db.VarChar(100)
   razon_social                  String?                         @db.VarChar(150)
   rfc                           String?                         @db.VarChar(13)
@@ -425,7 +425,7 @@ model empresas {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model eventos_agenda {
-  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
   empresa_id       String    @db.Uuid
   usuario_id       String    @db.Uuid
   titulo           String    @db.VarChar(200)
@@ -442,7 +442,7 @@ model eventos_agenda {
 }
 
 model eventos_tiempo_real {
-  id                   String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                   String                @id @default(uuid()) @db.Uuid
   empresa_id           String                @db.Uuid
   tipo_evento_id       String?               @db.Uuid
   descripcion          String?
@@ -459,7 +459,7 @@ model eventos_tiempo_real {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model extensiones {
-  id                        String                     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                        String                     @id @default(uuid()) @db.Uuid
   empresa_id                String                     @db.Uuid
   sucursal_id               String?                    @db.Uuid
   lista_extension_id        String?                    @db.Uuid
@@ -490,7 +490,7 @@ model extensiones {
 }
 
 model grupos_atencion {
-  id                          String                       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                          String                       @id @default(uuid()) @db.Uuid
   empresa_id                  String                       @db.Uuid
   clave                       String                       @db.VarChar(50)
   descripcion                 String?
@@ -521,7 +521,7 @@ model grupos_extensiones {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model horarios {
-  id             String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id             String      @id @default(uuid()) @db.Uuid
   calendario_id  String      @db.Uuid
   dia_semana     String      @db.VarChar(10)
   hora_inicio    DateTime    @db.Time(6)
@@ -534,7 +534,7 @@ model horarios {
 }
 
 model informacion_negocio {
-  id                  String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String    @id @default(uuid()) @db.Uuid
   empresa_id          String    @db.Uuid
   tema                String    @db.VarChar(100)
   descripcion         String?
@@ -547,7 +547,7 @@ model informacion_negocio {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model jobs_async {
-  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
   empresa_id       String    @db.Uuid
   tipo             String    @db.VarChar(50)
   payload          Json
@@ -569,7 +569,7 @@ model jobs_async {
 }
 
 model listas_extensiones {
-  id                  String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String        @id @default(uuid()) @db.Uuid
   empresa_id          String        @db.Uuid
   clave               String        @db.VarChar(50)
   descripcion         String?
@@ -583,7 +583,7 @@ model listas_extensiones {
 }
 
 model listas_faq {
-  id                   String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                   String                 @id @default(uuid()) @db.Uuid
   empresa_id           String                 @db.Uuid
   nombre               String                 @db.VarChar(100)
   descripcion          String?
@@ -597,7 +597,7 @@ model listas_faq {
 }
 
 model listas_productos {
-  id                  String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String                @id @default(uuid()) @db.Uuid
   empresa_id          String                @db.Uuid
   clave               String                @db.VarChar(50)
   descripcion         String?
@@ -614,7 +614,7 @@ model listas_productos {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model llamadas {
-  id                         String                      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                         String                      @id @default(uuid()) @db.Uuid
   empresa_id                 String                      @db.Uuid
   agente_id                  String?                     @db.Uuid
   workflow_id                String?                     @db.Uuid
@@ -680,7 +680,7 @@ model pbx_eventos_raw {
 }
 
 model permisos {
-  id             String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id             String           @id @default(uuid()) @db.Uuid
   clave          String           @unique @db.VarChar(100)
   nombre         String           @db.VarChar(100)
   descripcion    String?
@@ -691,7 +691,7 @@ model permisos {
 }
 
 model preguntas_frecuentes {
-  id                      String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                      String                   @id @default(uuid()) @db.Uuid
   lista_faq_id            String                   @db.Uuid
   pregunta                String
   respuesta               String
@@ -704,7 +704,7 @@ model preguntas_frecuentes {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model productos_servicios {
-  id                            String                         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                            String                         @id @default(uuid()) @db.Uuid
   lista_producto_id             String                         @db.Uuid
   marca                         String?                        @db.VarChar(100)
   modelo                        String?                        @db.VarChar(100)
@@ -718,7 +718,7 @@ model productos_servicios {
 }
 
 model puestos {
-  id             String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id             String        @id @default(uuid()) @db.Uuid
   empresa_id     String        @db.Uuid
   nombre         String        @db.VarChar(100)
   deleted_at     DateTime?     @db.Timestamp(6)
@@ -729,7 +729,7 @@ model puestos {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model reglas_workflow {
-  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
   workflow_id    String    @db.Uuid
   condicion      Json
   accion         Json
@@ -754,7 +754,7 @@ model roles_permisos {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model sesiones {
-  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
   usuario_id       String    @db.Uuid
   token_hash       String    @db.VarChar(255)
   ip               String?   @db.VarChar(45)
@@ -769,7 +769,7 @@ model sesiones {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model sincronizaciones_pbx {
-  id                  String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String               @id @default(uuid()) @db.Uuid
   empresa_id          String               @db.Uuid
   pbx_id              String?              @db.Uuid
   endpoint            String?              @db.VarChar(200)
@@ -782,7 +782,7 @@ model sincronizaciones_pbx {
 }
 
 model sucursales {
-  id                  String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String              @id @default(uuid()) @db.Uuid
   empresa_id          String              @db.Uuid
   nombre              String              @db.VarChar(100)
   direccion           String?
@@ -798,7 +798,7 @@ model sucursales {
 }
 
 model telefonos_cliente {
-  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
   cliente_id     String    @db.Uuid
   telefono       String    @db.VarChar(20)
   es_principal   Boolean?  @default(false)
@@ -809,7 +809,7 @@ model telefonos_cliente {
 }
 
 model ticket_comentarios {
-  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
   ticket_id      String    @db.Uuid
   usuario_id     String    @db.Uuid
   comentario     String
@@ -821,7 +821,7 @@ model ticket_comentarios {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model tickets {
-  id                        String                     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                        String                     @id @default(uuid()) @db.Uuid
   empresa_id                String                     @db.Uuid
   llamada_id                String?                    @db.Uuid
   cliente_id                String?                    @db.Uuid
@@ -869,7 +869,7 @@ model usuario_roles {
 }
 
 model usuarios {
-  id                      String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                      String                   @id @default(uuid()) @db.Uuid
   empresa_id              String                   @db.Uuid
   nombre                  String                   @db.VarChar(100)
   usuario                 String                   @db.VarChar(50)
@@ -903,7 +903,7 @@ model usuarios {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model versiones_prompt {
-  id                 String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                 String            @id @default(uuid()) @db.Uuid
   agente_virtual_id  String            @unique(map: "uq_prompt_activo", where: raw("(es_activa = true)")) @db.Uuid
   usuario_id         String            @db.Uuid
   version            Int               @default(1)
@@ -920,7 +920,7 @@ model versiones_prompt {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model workflow_versiones {
-  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                 String    @id @default(uuid()) @db.Uuid
   workflow_id        String    @unique(map: "uq_workflow_activo", where: raw("(es_activa = true)")) @db.Uuid
   usuario_id         String    @db.Uuid
   version            Int       @default(1)
@@ -935,7 +935,7 @@ model workflow_versiones {
 }
 
 model workflows {
-  id                       String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                       String                    @id @default(uuid()) @db.Uuid
   empresa_id               String                    @db.Uuid
   nombre                   String                    @db.VarChar(100)
   descripcion              String?
