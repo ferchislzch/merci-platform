@@ -42,7 +42,8 @@
 
 'use strict';
 
-const prisma = require('../src/config/database');
+const crypto = require('crypto');
+const prisma = require('../src/config/database'); // Esta línea ya existe
 
 // ─── Constantes de Prueba ─────────────────────────────────────────────────────
 
@@ -182,6 +183,7 @@ async function encontrarUsuario(empresaId) {
 async function crearAgentePrueba(empresaId) {
   const agente = await prisma.agentes_virtuales.create({
     data: {
+      id:          crypto.randomUUID(),
       empresa_id:  empresaId,
       nombre:      TEST_NOMBRE_AGENTE,
       descripcion: 'Agente temporal creado por el script de pruebas de Bina 4. Eliminar al finalizar QA.'
@@ -201,6 +203,7 @@ async function crearVersionPrompt(agenteId, usuarioId) {
   const prompt = await prisma.versiones_prompt.create({
     data: {
       agente_virtual_id: agenteId,
+      id:                crypto.randomUUID(),
       usuario_id:        usuarioId,
       version:           1,
       prompt:            TEST_PROMPT_SISTEMA,
@@ -228,6 +231,7 @@ async function crearVersionPrompt(agenteId, usuarioId) {
 async function crearLlamadaPrueba(empresaId, agenteId) {
   const llamada = await prisma.llamadas.create({
     data: {
+      id:          crypto.randomUUID(),
       empresa_id:    empresaId,
       agente_id:     agenteId,
       pbx_call_id:   null,          // null = TTS FAIL-FAST limpio (sin costo de tokens TTS)
@@ -258,6 +262,7 @@ async function crearLlamadaPrueba(empresaId, agenteId) {
 async function insertarJobLLM(empresaId, llamadaId) {
   const job = await prisma.jobs_async.create({
     data: {
+      id:          crypto.randomUUID(),
       empresa_id:       empresaId,
       tipo:             'procesar_llm',
       payload:          {
