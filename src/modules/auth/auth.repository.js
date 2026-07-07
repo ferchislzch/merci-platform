@@ -1,5 +1,4 @@
 const prisma = require('../../config/database')
-
 /**
  * Busca empresas activas cuyo nombre_comercial contenga el texto buscado.
  * Usado por el autocomplete del formulario de login — endpoint público,
