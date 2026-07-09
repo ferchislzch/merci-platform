@@ -33,7 +33,7 @@ model agentes_virtuales {
   sucursales                sucursales?             @relation(fields: [sucursal_id], references: [id], onUpdate: NoAction, map: "fk_av_sucursal")
   catalogo_tipo_agente      catalogo_tipo_agente?   @relation(fields: [tipo_agente_id], references: [id], onUpdate: NoAction, map: "fk_av_tipo")
   llamadas                  llamadas[]
-  versiones_prompt          versiones_prompt?
+  versiones_prompt          versiones_prompt[]
 
   @@unique([empresa_id, numero_entrada], map: "uq_agente_numero_entrada", where: raw("((numero_entrada IS NOT NULL) AND (deleted_at IS NULL))"))
   @@unique([empresa_id, pbx_ivr_id], map: "uq_agente_pbx_ivr", where: raw("((pbx_ivr_id IS NOT NULL) AND (deleted_at IS NULL))"))
@@ -907,7 +907,7 @@ model usuarios {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model versiones_prompt {
   id                 String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  agente_virtual_id  String            @unique(map: "uq_prompt_activo", where: raw("(es_activa = true)")) @db.Uuid
+  agente_virtual_id  String            
   usuario_id         String            @db.Uuid
   version            Int               @default(1)
   prompt             String

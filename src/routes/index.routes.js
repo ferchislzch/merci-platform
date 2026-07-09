@@ -10,8 +10,8 @@ const sucursalesRoutes    = require('../modules/sucursales/sucursales.routes')
 // const empresasRoutes      = require('../modules/empresas/empresas.routes')
 
 // ─── Bina 2
-// const agentesRoutes       = require('../modules/agentes/agentes.routes')
-// const workflowsRoutes     = require('../modules/workflows/workflows.routes')
+const agentesRoutes       = require('../modules/agentes/agentes.routes')  
+//const workflowsRoutes     = require('../modules/workflows/workflows.routes')
 
 // ─── Bina 3
 // const llamadasRoutes      = require('../modules/llamadas/llamadas.routes')
@@ -33,7 +33,7 @@ router.use('/admin/empresas', empresasRoutes)
 router.use('/sucursales',     sucursalesRoutes)
 // router.use('/roles',          rolesRoutes)
 // router.use('/admin/empresas', empresasRoutes)
-// router.use('/agentes',        agentesRoutes)
+router.use('/agentes',        agentesRoutes)
 // router.use('/workflows',      workflowsRoutes)
 // router.use('/llamadas',       llamadasRoutes)
 // router.use('/webhooks',       webhooksRoutes)
