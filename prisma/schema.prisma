@@ -33,7 +33,7 @@ model agentes_virtuales {
   sucursales                sucursales?             @relation(fields: [sucursal_id], references: [id], onUpdate: NoAction, map: "fk_av_sucursal")
   catalogo_tipo_agente      catalogo_tipo_agente?   @relation(fields: [tipo_agente_id], references: [id], onUpdate: NoAction, map: "fk_av_tipo")
   llamadas                  llamadas[]
-  versiones_prompt          versiones_prompt[]
+  versiones_prompt          versiones_prompt?
 
   @@unique([empresa_id, numero_entrada], map: "uq_agente_numero_entrada", where: raw("((numero_entrada IS NOT NULL) AND (deleted_at IS NULL))"))
   @@unique([empresa_id, pbx_ivr_id], map: "uq_agente_pbx_ivr", where: raw("((pbx_ivr_id IS NOT NULL) AND (deleted_at IS NULL))"))
@@ -386,11 +386,11 @@ model empresas {
   rfc                           String?                         @db.VarChar(13)
   telefono                      String?                         @db.VarChar(20)
   correo                        String?                         @db.Citext
+  codigo_acceso                 String?                         @unique(map: "uq_empresas_codigo_acceso", where: raw("(deleted_at IS NULL)")) @db.VarChar(20)
   status                        String?                         @default("activo") @db.VarChar(20)
   deleted_at                    DateTime?                       @db.Timestamp(6)
   fecha_registro                DateTime?                       @default(now()) @db.Timestamp(6)
   fecha_actualizacion           DateTime?                       @default(now()) @db.Timestamp(6)
-  codigo_acceso                 String?                         @unique @db.VarChar(20)
   agentes_virtuales             agentes_virtuales[]
   auditoria_logs                auditoria_logs[]
   auditorias_comandos_ia        auditorias_comandos_ia[]
@@ -797,6 +797,7 @@ model sucursales {
   departamentos       departamentos[]
   extensiones         extensiones[]
   empresas            empresas            @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_suc_empresa")
+  usuarios            usuarios[]
 }
 
 model telefonos_cliente {
@@ -878,6 +879,7 @@ model usuarios {
   correo                  String                   @db.Citext
   password_hash           String                   @db.VarChar(255)
   telefono_2fa            String?                  @db.VarChar(20)
+  sucursal_id             String?                  @db.Uuid
   estado_usuario_id       String?                  @db.Uuid
   ultimo_acceso           DateTime?                @db.Timestamp(6)
   deleted_at              DateTime?                @db.Timestamp(6)
@@ -894,6 +896,7 @@ model usuarios {
   usuario_roles           usuario_roles[]
   empresas                empresas                 @relation(fields: [empresa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_usuarios_empresa")
   catalogo_estado_usuario catalogo_estado_usuario? @relation(fields: [estado_usuario_id], references: [id], onUpdate: NoAction, map: "fk_usuarios_estado")
+  sucursales              sucursales?              @relation(fields: [sucursal_id], references: [id], onUpdate: NoAction, map: "fk_usuarios_sucursal")
   versiones_prompt        versiones_prompt[]
   workflow_versiones      workflow_versiones[]
 
@@ -902,12 +905,13 @@ model usuarios {
   @@index([empresa_id, correo], map: "idx_usuarios_correo", where: raw("(deleted_at IS NULL)"))
   @@index([empresa_id], map: "idx_usuarios_empresa")
   @@index([empresa_id, usuario], map: "idx_usuarios_login", where: raw("(deleted_at IS NULL)"))
+  @@index([sucursal_id], map: "idx_usuarios_sucursal", where: raw("(sucursal_id IS NOT NULL)"))
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model versiones_prompt {
   id                 String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  agente_virtual_id  String            
+  agente_virtual_id  String            @unique(map: "uq_prompt_activo", where: raw("(es_activa = true)")) @db.Uuid
   usuario_id         String            @db.Uuid
   version            Int               @default(1)
   prompt             String

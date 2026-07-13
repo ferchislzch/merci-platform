@@ -1,4 +1,3 @@
-
 const workflowsService = require('./workflows.service');
 const prisma = require('../../config/database');
 
@@ -85,6 +84,7 @@ const workflowsController = {
             });
 
             res.status(201).json({
+                ok: true,
                 mensaje: "Workflow creado exitosamente",
                 data: resultado
             });

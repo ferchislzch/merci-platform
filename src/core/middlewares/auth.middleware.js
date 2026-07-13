@@ -34,6 +34,7 @@ const authenticate = async (req, res, next) => {
         req.user = {
         usuarioId: decoded.usuarioId,
         empresaId: decoded.empresaId,
+        sucursalId: decoded.sucursalId || null,
         roles: decoded.roles || [],
         permisos: decoded.permisos || [],
         esGlobal: decoded.esGlobal || false,

@@ -1,22 +1,31 @@
 'use strict'
 
 const empresasRepository = require('./empresas.repository')
-const { NotFoundError } = require('../../core/errors/NotFoundError')
-const AppError = require('../../core/errors/AppError')
-const audit = require('../../services/audit.service')
+const { NotFoundError }  = require('../../core/errors/NotFoundError')
+const AppError           = require('../../core/errors/AppError')
+const audit              = require('../../services/audit.service')
 
 const ESTADOS_VALIDOS = ['activo', 'suspendido', 'cancelado']
 
-// ── NUEVO: generador de código de acceso ──────────────────────────────────────
-const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+// ─── Generador de codigo_acceso único ────────────────────────────────────────
 
-const generarCodigo = () =>
-  Array.from({ length: 8 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join('')
+const LETRAS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+const DIGITOS = '0123456789'
 
-/**
- * Genera un codigo_acceso único de 8 caracteres alfanumérico.
- * Reintenta hasta 5 veces en caso de colisión (probabilidad ínfima).
- */
+const generarCodigo = () => {
+  const letras = Array.from(
+    { length: 3 },
+    () => LETRAS[Math.floor(Math.random() * LETRAS.length)]
+  ).join('')
+
+  const numeros = Array.from(
+    { length: 4 },
+    () => DIGITOS[Math.floor(Math.random() * DIGITOS.length)]
+  ).join('')
+
+  return `${letras}-${numeros}`
+}
+
 const generarCodigoUnico = async () => {
   for (let i = 0; i < 5; i++) {
     const codigo = generarCodigo()
@@ -36,12 +45,16 @@ const obtenerPorId = async ({ empresaId }) => {
   return empresa
 }
 
-// ── ACTUALIZADO: genera y guarda codigo_acceso automáticamente ────────────────
-const crear = async ({ nombre_comercial, razon_social, rfc, telefono, correo }, { usuarioId, ip }) => {
+// ← ACTUALIZADO: crea roles por defecto después de crear la empresa
+const crear = async (
+  { nombre_comercial, razon_social, rfc, telefono, correo },
+  { usuarioId, ip }
+) => {
   if (!nombre_comercial) throw new AppError('El nombre comercial es requerido', 400)
 
   const codigoAcceso = await generarCodigoUnico()
 
+  // 1. Crear la empresa
   const empresa = await empresasRepository.crear({
     nombre_comercial,
     razon_social,
@@ -50,6 +63,24 @@ const crear = async ({ nombre_comercial, razon_social, rfc, telefono, correo }, 
     correo,
     codigoAcceso,
   })
+
+  // 2. Crear los 2 roles por defecto en una sola transacción
+  //    Si falla, lanzamos AppError descriptivo — la empresa ya quedó creada
+  //    pero sin roles, lo que es preferible a no crear la empresa.
+  //    El Super Admin puede ejecutar el script SQL de emergencia si ocurre.
+  try {
+    await empresasRepository.crearRolesDefault({ empresaId: empresa.id })
+  } catch (err) {
+    console.error(
+      `[empresas.service] Empresa ${empresa.id} creada pero roles fallaron:`,
+      err.message
+    )
+    throw new AppError(
+      'La empresa fue creada pero los roles por defecto no pudieron generarse. ' +
+      'Contacta al equipo técnico para completar la configuración.',
+      500
+    )
+  }
 
   await audit.log({
     usuarioId,
@@ -62,23 +93,26 @@ const crear = async ({ nombre_comercial, razon_social, rfc, telefono, correo }, 
     datosNuevos: { nombre_comercial, rfc, codigo_acceso: codigoAcceso },
   })
 
-  return empresa // incluye codigo_acceso en la respuesta para que MERCI lo envíe por correo
+  // La respuesta incluye codigo_acceso para que MERCI lo envíe al cliente
+  return empresa
 }
 
-const editar = async ({ empresaId, nombre_comercial, razon_social, rfc, telefono, correo }, { usuarioId, ip }) => {
+const editar = async (
+  { empresaId, nombre_comercial, razon_social, rfc, telefono, correo },
+  { usuarioId, ip }
+) => {
   const empresaActual = await empresasRepository.buscarPorId({ empresaId })
   if (!empresaActual) throw new NotFoundError('Empresa')
 
   const datos = {}
-  if (nombre_comercial)          datos.nombre_comercial = nombre_comercial
-  if (razon_social !== undefined) datos.razon_social    = razon_social
-  if (rfc !== undefined)          datos.rfc             = rfc
-  if (telefono !== undefined)     datos.telefono        = telefono
-  if (correo !== undefined)       datos.correo          = correo
+  if (nombre_comercial)           datos.nombre_comercial = nombre_comercial
+  if (razon_social !== undefined) datos.razon_social     = razon_social
+  if (rfc !== undefined)          datos.rfc              = rfc
+  if (telefono !== undefined)     datos.telefono         = telefono
+  if (correo !== undefined)       datos.correo           = correo
 
-  if (Object.keys(datos).length === 0) {
+  if (Object.keys(datos).length === 0)
     throw new AppError('No se enviaron campos para actualizar', 400)
-  }
 
   const empresa = await empresasRepository.editar({ empresaId, datos })
 
@@ -98,9 +132,9 @@ const editar = async ({ empresaId, nombre_comercial, razon_social, rfc, telefono
 }
 
 const cambiarStatus = async ({ empresaId, status }, { usuarioId, ip }) => {
-  if (!ESTADOS_VALIDOS.includes(status)) {
+  if (!ESTADOS_VALIDOS.includes(status))
     throw new AppError(`Status inválido. Valores permitidos: ${ESTADOS_VALIDOS.join(', ')}`, 400)
-  }
+
   const empresa = await empresasRepository.buscarPorId({ empresaId })
   if (!empresa) throw new NotFoundError('Empresa')
 

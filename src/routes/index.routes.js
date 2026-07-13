@@ -7,10 +7,11 @@ const usuariosRoutes      = require('../modules/usuarios/usuarios.routes')
 const rolesRoutes         = require('../modules/roles/roles.routes')
 const empresasRoutes      = require('../modules/empresas/empresas.routes')
 const sucursalesRoutes    = require('../modules/sucursales/sucursales.routes')
+const departamentosRoutes = require('../modules/departamentos/departamentos.routes')
 // const empresasRoutes      = require('../modules/empresas/empresas.routes')
 
 // ─── Bina 2
-const agentesRoutes       = require('../modules/agentes/agentes.routes')  
+const agentesRoutes       = require('../modules/agentes/agentes.routes')
 const workflowsRoutes     = require('../modules/workflows/workflows.routes')
 
 // ─── Bina 3
@@ -31,6 +32,7 @@ router.use('/usuarios',       usuariosRoutes)
 router.use('/roles',          rolesRoutes)
 router.use('/admin/empresas', empresasRoutes)
 router.use('/sucursales',     sucursalesRoutes)
+router.use('/departamentos',  departamentosRoutes)
 // router.use('/roles',          rolesRoutes)
 // router.use('/admin/empresas', empresasRoutes)
 router.use('/agentes',        agentesRoutes)

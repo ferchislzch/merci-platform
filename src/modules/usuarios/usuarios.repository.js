@@ -1,30 +1,30 @@
+'use strict'
+
 const prisma = require('../../config/database')
 
-/**
- * Lista todos los usuarios activos de una empresa.
- * Incluye su estado y roles para mostrarlo en la tabla del frontend.
- * Soporta filtro opcional por nombre de usuario (búsqueda).
- */
-const listar = ({ empresaId, busqueda }) => {
+// ─── Usuarios ─────────────────────────────────────────────────────────────────
+
+const listar = ({ empresaId, sucursalId = null, excluirId = null, busqueda }) => {
   return prisma.usuarios.findMany({
     where: {
       empresa_id: empresaId,
       deleted_at: null,
-      ...(busqueda
-        ? {
-            OR: [
-              { nombre: { contains: busqueda, mode: 'insensitive' } },
-              { usuario: { contains: busqueda, mode: 'insensitive' } },
-              { correo: { contains: busqueda, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
+      ...(sucursalId ? { sucursal_id: sucursalId } : {}),
+      ...(excluirId   ? { id: { not: excluirId } }   : {}),
+      ...(busqueda ? {
+        OR: [
+          { nombre:  { contains: busqueda, mode: 'insensitive' } },
+          { usuario: { contains: busqueda, mode: 'insensitive' } },
+          { correo:  { contains: busqueda, mode: 'insensitive' } },
+        ],
+      } : {}),
     },
     select: {
       id: true,
       nombre: true,
       usuario: true,
       correo: true,
+      sucursal_id: true,
       ultimo_acceso: true,
       fecha_registro: true,
       catalogo_estado_usuario: { select: { id: true, nombre: true } },
@@ -38,15 +38,19 @@ const listar = ({ empresaId, busqueda }) => {
   })
 }
 
-/**
- * Busca un usuario por ID dentro de una empresa específica.
- * Incluye roles y permisos completos.
- */
-const buscarPorId = ({ usuarioId, empresaId }) => {
+const buscarPorId = ({ usuarioId, empresaId, sucursalId = null }) => {
   return prisma.usuarios.findFirst({
-    where: { id: usuarioId, empresa_id: empresaId, deleted_at: null },
+    where: {
+      id:         usuarioId,
+      empresa_id: empresaId,
+      deleted_at: null,
+      ...(sucursalId ? { sucursal_id: sucursalId } : {}),
+    },
     include: {
       catalogo_estado_usuario: true,
+      sucursales: {
+        select: { id: true, nombre: true },
+      },
       usuario_roles: {
         include: {
           catalogo_roles: {
@@ -60,11 +64,6 @@ const buscarPorId = ({ usuarioId, empresaId }) => {
   })
 }
 
-/**
- * Verifica si ya existe un usuario activo con ese `usuario` o `correo`
- * dentro de la misma empresa — para dar un mensaje de error específico
- * antes de que Prisma falle con P2002 genérico.
- */
 const existeDuplicado = ({ empresaId, usuario, correo, excluirId = null }) => {
   return prisma.usuarios.findFirst({
     where: {
@@ -77,21 +76,15 @@ const existeDuplicado = ({ empresaId, usuario, correo, excluirId = null }) => {
   })
 }
 
-const crear = ({
-  empresaId,
-  nombre,
-  usuario,
-  correo,
-  passwordHash,
-  estadoUsuarioId,
-}) => {
+const crear = ({ empresaId, sucursalId = null, nombre, usuario, correo, passwordHash, estadoUsuarioId }) => {
   return prisma.usuarios.create({
     data: {
-      empresa_id: empresaId,
+      empresa_id:        empresaId,
+      sucursal_id:       sucursalId,
       nombre,
       usuario,
       correo,
-      password_hash: passwordHash,
+      password_hash:     passwordHash,
       estado_usuario_id: estadoUsuarioId,
     },
     select: {
@@ -99,6 +92,8 @@ const crear = ({
       nombre: true,
       usuario: true,
       correo: true,
+      sucursal_id: true,
+      estado_usuario_id: true,
       fecha_registro: true,
       catalogo_estado_usuario: { select: { id: true, nombre: true } },
     },
@@ -108,104 +103,86 @@ const crear = ({
 const editar = ({ usuarioId, datos }) => {
   return prisma.usuarios.update({
     where: { id: usuarioId },
-    data: datos,
+    data:  datos,
     select: {
       id: true,
       nombre: true,
       usuario: true,
       correo: true,
+      sucursal_id: true,
+      estado_usuario_id: true,
       catalogo_estado_usuario: { select: { id: true, nombre: true } },
     },
   })
 }
 
-/**
- * Soft delete — nunca borra la fila, solo marca deleted_at.
- * Las sesiones activas del usuario quedarán inválidas en el
- * siguiente request porque auth.middleware.js verifica sesión activa,
- * y las sesiones tienen ON DELETE CASCADE en usuarios, pero como
- * es soft delete (no eliminamos la fila), hay que desactivarlas a mano.
- */
 const eliminar = ({ usuarioId }) => {
   return prisma.$transaction([
-    // Desactivar sesiones activas del usuario
     prisma.sesiones.updateMany({
       where: { usuario_id: usuarioId, activo: true },
-      data: { activo: false },
+      data:  { activo: false },
     }),
-    // Soft delete del usuario
     prisma.usuarios.update({
       where: { id: usuarioId },
-      data: { deleted_at: new Date() },
+      data:  { deleted_at: new Date() },
     }),
   ])
 }
 
-/**
- * Obtiene el id del estado 'Activo' del catálogo.
- * Se usa al crear un usuario nuevo — el estado inicial siempre es Activo.
- */
 const obtenerEstadoActivo = () => {
   return prisma.catalogo_estado_usuario.findFirst({
-    where: { nombre: 'Activo', deleted_at: null },
+    where:  { nombre: 'Activo', deleted_at: null },
     select: { id: true },
   })
 }
 
-/**
- * Reemplaza todos los roles de un usuario por los nuevos indicados.
- * Usa una transacción para que no quede el usuario sin roles si algo falla.
- */
 const reemplazarRoles = ({ usuarioId, rolesIds }) => {
   return prisma.$transaction([
     prisma.usuario_roles.deleteMany({ where: { usuario_id: usuarioId } }),
     prisma.usuario_roles.createMany({
       data: rolesIds.map((rolId) => ({
         usuario_id: usuarioId,
-        rol_id: rolId,
+        rol_id:     rolId,
       })),
     }),
   ])
 }
 
+// ─── Intentos de login ────────────────────────────────────────────────────────
+
 const limpiarIntentosDeUsuario = ({ usuarioId, empresaId }) => {
   return prisma.intentos_login.deleteMany({
-    where: {
-      usuario_id: usuarioId,
-      empresa_id: empresaId,
-    },
+    where: { usuario_id: usuarioId, empresa_id: empresaId },
   })
 }
 
-/**
- * Devuelve el Set de usuario_ids bloqueados dentro de una empresa.
- * Un usuario está bloqueado si tiene >= 5 intentos fallidos en los últimos 15 min.
- * Usado por listar() en el service para agregar bloqueado: true/false a cada usuario.
- */
 const obtenerUsuariosBloqueados = async ({ empresaId }) => {
   const desde = new Date(Date.now() - 15 * 60 * 1000)
-  const grupos = await prisma.intentos_login.groupBy({
-    by:    ['usuario_id'],
+
+  const intentos = await prisma.intentos_login.findMany({
     where: {
       empresa_id: empresaId,
       fecha:      { gte: desde },
       usuario_id: { not: null },
     },
-    _count: { usuario_id: true },
-    having: {
-      usuario_id: { _count: { gte: 5 } },
-    },
+    select: { usuario_id: true },
   })
-  return new Set(grupos.map((g) => g.usuario_id))
+
+  const conteo = {}
+  for (const { usuario_id } of intentos) {
+    conteo[usuario_id] = (conteo[usuario_id] || 0) + 1
+  }
+
+  return new Set(
+    Object.entries(conteo)
+      .filter(([, count]) => count >= 5)
+      .map(([id]) => id)
+  )
 }
 
-/**
- * Verifica si un usuario específico está bloqueado.
- * Usado por obtenerPorId() para incluir bloqueado: true/false en el detalle.
- */
 const estaBloqueado = async ({ usuarioId, empresaId }) => {
   const desde = new Date(Date.now() - 15 * 60 * 1000)
-  const count = await prisma.intentos_login.count({
+  const count  = await prisma.intentos_login.count({
     where: {
       usuario_id: usuarioId,
       empresa_id: empresaId,
@@ -213,6 +190,57 @@ const estaBloqueado = async ({ usuarioId, empresaId }) => {
     },
   })
   return count >= 5
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+const obtenerStats = async ({ empresaId, sucursalId = null }) => {
+  const ahora        = new Date()
+  const primerDiaMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
+
+  const whereUsuarios = {
+    empresa_id: empresaId,
+    deleted_at: null,
+    ...(sucursalId ? { sucursal_id: sucursalId } : {}),
+  }
+
+  const [totalUsuarios, nuevosEsteMes, totalRoles, sesionesActivas] =
+    await prisma.$transaction([
+      prisma.usuarios.count({ where: whereUsuarios }),
+      prisma.usuarios.count({
+        where: { ...whereUsuarios, fecha_registro: { gte: primerDiaMes } },
+      }),
+      prisma.catalogo_roles.count({
+        where: { empresa_id: empresaId, deleted_at: null },
+      }),
+      prisma.sesiones.count({
+        where: {
+          activo:           true,
+          fecha_expiracion: { gt: ahora },
+          usuarios: {
+            empresa_id: empresaId,
+            deleted_at: null,
+            ...(sucursalId ? { sucursal_id: sucursalId } : {}),
+          },
+        },
+      }),
+    ])
+
+  return { totalUsuarios, nuevosEsteMes, totalRoles, sesionesActivas }
+}
+
+// ─── Catálogo de estados ──────────────────────────────────────────────────────
+
+/**
+ * Lista todos los estados de usuario disponibles en el catálogo.
+ * Usado para rellenar el dropdown ESTADO en el form de edición.
+ */
+const listarEstados = () => {
+  return prisma.catalogo_estado_usuario.findMany({
+    where:   { deleted_at: null },
+    select:  { id: true, nombre: true },
+    orderBy: { nombre: 'asc' },
+  })
 }
 
 module.exports = {
@@ -227,4 +255,6 @@ module.exports = {
   limpiarIntentosDeUsuario,
   obtenerUsuariosBloqueados,
   estaBloqueado,
+  obtenerStats,
+  listarEstados,
 }
