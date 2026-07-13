@@ -8,4 +8,7 @@ class NotFoundError extends AppError {
   }
 }
 
-module.exports = { NotFoundError }
+// Export dual: soporta tanto `const NotFoundError = require(...)` (default)
+// como `const { NotFoundError } = require(...)` (nombrado).
+module.exports = NotFoundError
+module.exports.NotFoundError = NotFoundError
