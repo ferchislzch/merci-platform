@@ -1,4 +1,3 @@
-// src/modules/webhooks/webhooks.service.js
 // Bina 3 — CloudUCM, Llamadas y PBX
 //
 // FLUJO OBLIGATORIO (nunca alterar el orden):
@@ -21,7 +20,9 @@ const callOrchestrator   = require('../../services/callOrchestrator.service');
 const NotFoundError      = require('../../core/errors/NotFoundError');
 
 // Acción por defecto cuando no hay otra instrucción disponible
-const ACCION_DEFAULT = { action: 'play_prompt', prompt_id: 'welcome' };
+// FORMATO CONFIRMADO CONTRA CLOUDUCM REAL (2026-07-21): requiere status:0 o
+// CloudUCM descarta la respuesta como excepción (ver callOrchestrator.service.js).
+const ACCION_DEFAULT = { status: 0, action: 'play', fileName: 'welcome' };
 
 /**
  * Extrae el número de entrada del IVR desde el campo action_type de CloudUCM.

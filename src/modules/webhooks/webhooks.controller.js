@@ -1,8 +1,6 @@
-// src/modules/webhooks/webhooks.controller.js
 // Bina 3 — CloudUCM, Llamadas y PBX
 //
-// ⚠️  ESTE CONTROLADOR ES LA EXCEPCIÓN AL ENVELOPE ESTÁNDAR DE MERCI
-// ─────────────────────────────────────────────────────────────────────
+// ESTE CONTROLADOR ES LA EXCEPCIÓN AL ENVELOPE ESTÁNDAR DE MERCI
 // TODOS los demás endpoints de MERCI responden: { ok, mensaje, data }
 // ESTE endpoint responde: { "action": "...", "prompt_id": "..." }
 //
@@ -21,7 +19,9 @@ const webhooksService = require('./webhooks.service');
 
 // Acción de fallback: si algo falla internamente, al menos reproducir el audio
 // de bienvenida en lugar de dejar al cliente en silencio total.
-const ACCION_FALLBACK = { action: 'play_prompt', prompt_id: 'welcome' };
+// FORMATO CONFIRMADO CONTRA CLOUDUCM REAL (2026-07-21): requiere status:0 o
+// CloudUCM descarta la respuesta como excepción (ver callOrchestrator.service.js).
+const ACCION_FALLBACK = { status: 0, action: 'play', fileName: 'welcome' };
 
 /**
  * POST /api/webhooks/clouducm
