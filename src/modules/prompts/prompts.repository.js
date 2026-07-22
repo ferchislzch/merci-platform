@@ -13,38 +13,19 @@ const obtenerUltimaVersion = async (agenteId) => {
 
 // 2. Transacción: Desactivar el actual y crear la nueva versión
 const crearVersion = async (agenteId, usuarioId, datosPrompt, proximaVersion) => {
-    return await prisma.$transaction(async (tx) => {
-        // A. Desactivar cualquier prompt que estuviera activo para este agente
-        // 👇 Corregido a tx.versiones_prompt
-        await tx.versiones_prompt.updateMany({ 
-            where: {
-                agente_virtual_id: agenteId,
-                es_activa: true
-            },
-            data: {
-                es_activa: false
-            }
-        });
-
-        // B. Crear la nueva versión usando conexiones nativas de Prisma
-        // 👇 Corregido a tx.versiones_prompt
-        return await tx.versiones_prompt.create({
-            data: {
-                version: proximaVersion,
-                prompt: datosPrompt.prompt,
-                descripcion_cambio: datosPrompt.descripcion_cambio || null,
-                es_activa: true,
-                agentes_virtuales: {
-                    connect: { id: agenteId }
-                },
-                usuarios: {
-                    connect: { id: usuarioId }
-                }
-            }
-        });
+    // Ya no usamos $transaction ni updateMany, la BD hace la desactivación sola.
+    return await prisma.versiones_prompt.create({
+        data: {
+            // Asignación directa de los campos escalares (SIN 'connect')
+            agente_virtual_id: agenteId, 
+            usuario_id: usuarioId,       
+            version: proximaVersion,
+            prompt: datosPrompt.prompt,
+            descripcion_cambio: datosPrompt.descripcion_cambio || null,
+            es_activa: true
+        }
     });
 };
-
 const obtenerVersiones = async (agenteId) => {
     return await prisma.versiones_prompt.findMany({
         where: { 
