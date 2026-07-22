@@ -1,8 +1,8 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- MERCI — SEEDS DE DESARROLLO / QA  (⚠️ SOLO PARA DESARROLLO)
+-- MERCI — SEEDS DE DESARROLLO / QA  ( SOLO PARA DESARROLLO)
 -- v5 | Julio 2026
 -- ════════════════════════════════════════════════════════════════════════════
--- ⚠️  ADVERTENCIA DE SEGURIDAD:
+--   ADVERTENCIA DE SEGURIDAD:
 --   Este archivo crea empresas y usuarios FICTICIOS con la contraseña de prueba
 --   conocida 'Admin123!'. NO EJECUTAR EN PRODUCCIÓN. En producción los usuarios
 --   deben crearse con contraseñas propias, nunca con este seed.
