@@ -12,15 +12,33 @@ const httpsAgent = new https.Agent({ rejectUnauthorized: false })
 const md5 = (value) =>
     crypto.createHash('md5').update(value).digest('hex')
 
-// Limpia el array de cookies que devuelve CloudUCM
-// y las une en un string de header Cookie válido
-const parseCookieHeader = (cookieArray) => {
-    if (!cookieArray) return ''
-    if (Array.isArray(cookieArray)) {
-        return cookieArray.map((c) => c.split(';')[0]).join('; ')
-    }
-    return cookieArray
-}
+// ─── FIX [Fase 1]: migración de GET /cgi (legacy) a POST /api (formato oficial) ──
+//
+// DIAGNÓSTICO CONFIRMADO EN PRUEBAS REALES (2026-07-21):
+//   El endpoint legacy GET /cgi?action=... respondía el "challenge" con status 0
+//   para CUALQUIER usuario (incluso uno recién creado, con permisos "All",
+//   contraseña verificada carácter por carácter contra el panel), pero el
+//   "login" SIEMPRE fallaba con status -37 "Wrong account or password!".
+//   Se probó exactamente el mismo usuario/contraseña/challenge con el formato
+//   oficial de la documentación (POST + JSON a /api) y el login funcionó al
+//   primer intento (status 0 + cookie real).
+//
+//   Conclusión: en CloudUCM hosted, los usuarios creados en
+//   "Integrations > API Configuration > HTTPS API Settings (New)" solo se
+//   validan contra el endpoint NUEVO (POST /api con body JSON). El endpoint
+//   viejo (GET /cgi) es el mecanismo legacy y no los reconoce para login,
+//   aunque sí responda el challenge de forma genérica.
+//
+// Por eso: todas las requests ahora son POST a `${baseUrl}/api` con el body
+// envuelto en { request: {...} }, tal como documenta el manual oficial de
+// Grandstream (IPPBX-HTTPS-API-Documentation-Center). Se agrega además el
+// parámetro "version" en el challenge, tal como recomienda esa misma doc.
+//
+// La respuesta llega también en la forma { response: {...}, status: N },
+// igual que antes — por eso el resto de los métodos (getExtensions, getCDR,
+// etc.) no necesitaron cambios en cómo LEEN la respuesta, solo en cómo se
+// ENVÍA la request.
+const API_VERSION = '1.0'
 
 class CloudUCMProvider extends IPBXProvider {
     constructor() {
@@ -32,9 +50,11 @@ class CloudUCMProvider extends IPBXProvider {
     }
 
     /**
-     * Autenticación MD5 en dos pasos (lógica verificada contra UCM real):
-     * 1. GET /cgi?action=challenge → obtiene challenge string
-     * 2. GET /cgi?action=login&token=md5(challenge + password)
+     * Autenticación MD5 en dos pasos (formato oficial POST + JSON, verificado
+     * contra UCM hosted real el 2026-07-21):
+     * 1. POST /api  { request: { action: 'challenge', user, version } }
+     * 2. POST /api  { request: { action: 'login', user, token } }
+     *    donde token = MD5(challenge + password)
      *
      * Lee credenciales desde configuraciones_pbx en BD (Prisma)
      * @param {string} empresaId - UUID de la empresa
@@ -67,11 +87,12 @@ class CloudUCMProvider extends IPBXProvider {
         throw err
         }
 
-        // Paso 1: obtener challenge
-        const challengeRes = await axios.get(`${this.baseUrl}/cgi`, {
-        params: { action: 'challenge', user: this.usuario },
-        httpsAgent,
-        })
+        // Paso 1: obtener challenge — POST + JSON a /api (formato oficial)
+        const challengeRes = await axios.post(
+        `${this.baseUrl}/api`,
+        { request: { action: 'challenge', user: this.usuario, version: API_VERSION } },
+        { httpsAgent }
+        )
 
         const challenge = challengeRes.data?.response?.challenge
 
@@ -79,14 +100,16 @@ class CloudUCMProvider extends IPBXProvider {
         throw new Error('CloudUCM no devolvió challenge en la respuesta')
         }
 
-        // Paso 2: login con token MD5(challenge + password)
-        // NOTA: el orden correcto es challenge + password (verificado por tu compañera)
+        // Paso 2: login con token MD5(challenge + password) — POST + JSON a /api
+        // NOTA: el orden correcto es challenge + password (confirmado contra
+        // la documentación oficial de Grandstream y contra el UCM real)
         const token = md5(challenge + apiPassword)
 
-        const loginRes = await axios.get(`${this.baseUrl}/cgi`, {
-        params: { action: 'login', user: this.usuario, token },
-        httpsAgent,
-        })
+        const loginRes = await axios.post(
+        `${this.baseUrl}/api`,
+        { request: { action: 'login', user: this.usuario, token } },
+        { httpsAgent }
+        )
 
         if (loginRes.data?.status !== 0) {
         throw new Error(
@@ -95,8 +118,11 @@ class CloudUCMProvider extends IPBXProvider {
         }
 
         // Guardar cookie y tiempo de expiración
-        this.cookie    = parseCookieHeader(loginRes.headers['set-cookie'])
-        this.expiresAt = Date.now() + (30 * 60 * 1000) // 30 minutos
+        // NOTA: la doc oficial indica que la cookie expira a los 10 minutos
+        // (no 30). Se ajusta el margen a 9 min para renovar con colchón antes
+        // de que el UCM la invalide.
+        this.cookie    = loginRes.data?.response?.cookie
+        this.expiresAt = Date.now() + (9 * 60 * 1000) // 9 minutos (cookie real expira en 10)
 
         return {
         status:   loginRes.data?.status,
@@ -116,14 +142,18 @@ class CloudUCMProvider extends IPBXProvider {
     }
 
     /**
-     * Ejecuta una request GET autenticada contra CloudUCM
+     * Ejecuta una request autenticada contra CloudUCM — POST + JSON a /api,
+     * incluyendo la cookie de sesión dentro del body (formato oficial),
+     * no como header.
+     * @param {string} action - acción a ejecutar (ej. 'listAccount', 'cdrapi')
+     * @param {Object} params - parámetros adicionales de la acción
      */
     async _request(action, params = {}) {
-        const res = await axios.get(`${this.baseUrl}/cgi`, {
-        params: { action, ...params },
-        headers: { Cookie: this.cookie },
-        httpsAgent,
-        })
+        const res = await axios.post(
+        `${this.baseUrl}/api`,
+        { request: { action, cookie: this.cookie, ...params } },
+        { httpsAgent }
+        )
         return res.data
     }
 
@@ -182,19 +212,29 @@ class CloudUCMProvider extends IPBXProvider {
 
     /**
      * Obtiene grabación de una llamada bajo demanda (recapi)
+     *
+     * OJO [pendiente Fase 2]: la doc oficial de recapi (CDR/REC API Guide)
+     * indica que los parámetros son `filedir` y `filename`, no `callid`.
+     * Este método se deja funcionalmente igual que antes (por callId) porque
+     * cambiar la firma es una decisión de Fase 2 (contrato real de grabación),
+     * no de este fix de Fase 1 (formato del endpoint). Ver runbook.
+     *
+     * recapi además devuelve el binario directamente (no JSON), así que no
+     * puede usar _request() (que asume JSON) — se mantiene con axios directo,
+     * ahora vía POST /api en vez de GET /cgi.
+     *
      * @param {string} empresaId
      * @param {string} callId
-     * @returns {Promise}
+     * @returns {Promise<Buffer>}
      */
     async getRecording(empresaId, callId) {
         await this._ensureSession(empresaId)
 
-        const res = await axios.get(`${this.baseUrl}/cgi`, {
-        params: { action: 'recapi', callid: callId },
-        headers: { Cookie: this.cookie },
-        responseType: 'arraybuffer',
-        httpsAgent,
-        })
+        const res = await axios.post(
+        `${this.baseUrl}/api`,
+        { request: { action: 'recapi', cookie: this.cookie, callid: callId } },
+        { httpsAgent, responseType: 'arraybuffer' }
+        )
 
         return Buffer.from(res.data)
     }

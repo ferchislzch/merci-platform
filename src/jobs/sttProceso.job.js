@@ -46,6 +46,8 @@
 
 const prisma            = require('../config/database');
 const AIProviderFactory = require('../providers/AIProviderFactory');
+const CloudUCMProvider = require('../services/pbx/CloudUCMProvider');
+
 const { URL }           = require('url');
 
 // ─── TODO [Bina 1]: WebSocket Service ────────────────────────────────────────
@@ -137,78 +139,21 @@ const CONFIG = {
 async function _descargarAudioCloudUCM(empresaId, audioFilename, audioFiledir) {
   const filedir = audioFiledir ?? CONFIG.UCM_FILEDIR_DEFAULT;
 
-  // — Obtener credenciales CloudUCM de configuraciones_empresa —
-  // TODO [Bina 3]: Confirmar nombre del campo en configuraciones_empresa
-  const config = await prisma.configuraciones_empresa.findUnique({
-    where:  { empresa_id: empresaId },
-    select: { credenciales_cloudUCM: true }  // ← nombre tentativo, confirmar con Bina 3
-  });
-
-  if (!config?.credenciales_cloudUCM) {
-    throw new Error(
-      `Empresa ${empresaId} no tiene credenciales CloudUCM configuradas. ` +
-      `Verifica configuraciones_empresa.credenciales_cloudUCM`
-    );
-  }
-
-  const { ucm_host, ucm_port = 8089, ucm_token } = config.credenciales_cloudUCM;
-
-  if (!ucm_host || !ucm_token) {
-    throw new Error(
-      `Credenciales CloudUCM incompletas para empresa ${empresaId}. ` +
-      `Se requieren: ucm_host, ucm_token. Recibido: ${JSON.stringify(config.credenciales_cloudUCM)}`
-    );
-  }
-
-  const ucmApiUrl = `https://${ucm_host}:${ucm_port}/api`;
+  const ucm = new CloudUCMProvider();
 
   console.log(
-    `[STT Job][${WORKER_ID}] ⬇ Descargando grabación '${audioFilename}' ` +
-    `(dir: ${filedir}) desde ${ucmApiUrl}`
+    `[STT Job][${WORKER_ID}] Descargando grabación '${audioFilename}' (dir: ${filedir})`
   );
 
-  // — Llamada a la HTTPS API del UCM: acción recapi —
-  const respuesta = await fetch(ucmApiUrl, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    // TODO [Bina 3]: Si el UCM usa certificado auto-firmado agregar:
-    //   agent: new (require('https').Agent)({ rejectUnauthorized: false })
-    body: JSON.stringify({
-      request: {
-        action:   'recapi',
-        cookie:   ucm_token,
-        filedir,
-        filename: audioFilename
-      }
-    })
-  });
+  // getRecording internamente hace connect/_ensureSession (login MD5 + cookie)
+  // leyendo configuraciones_pbx. No hay que manejar credenciales aquí.
+  // OJO: la firma actual espera un identificador de grabación; ver nota abajo.
+  const audioBuffer = await ucm.getRecording(empresaId, audioFilename);
 
-  if (!respuesta.ok) {
+  if (!audioBuffer || audioBuffer.length === 0) {
     throw new Error(
-      `CloudUCM recapi respondió con HTTP ${respuesta.status} para el archivo ` +
-      `'${audioFilename}'. Verifica que el token de sesión sea válido.`
-    );
-  }
-
-  // Verificar que la respuesta no sea un JSON de error del UCM
-  // (el UCM retorna JSON en errores de autenticación aunque el HTTP sea 200)
-  const contentType = respuesta.headers.get('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    const errorBody = await respuesta.json();
-    throw new Error(
-      `CloudUCM recapi retornó error JSON para '${audioFilename}': ` +
-      JSON.stringify(errorBody)
-    );
-  }
-
-  // La respuesta exitosa es el binario del archivo de audio
-  const arrayBuffer = await respuesta.arrayBuffer();
-  const audioBuffer = Buffer.from(arrayBuffer);
-
-  if (audioBuffer.length === 0) {
-    throw new Error(
-      `CloudUCM retornó un buffer de audio vacío para el archivo '${audioFilename}'. ` +
-      `Verifica que el archivo exista en el UCM en el directorio '${filedir}'.`
+      `CloudUCM devolvió audio vacío para '${audioFilename}' (dir: ${filedir}). ` +
+      `Verifica que la grabación exista en el UCM.`
     );
   }
 
