@@ -69,13 +69,13 @@ let corriendo = false
  * duplicado cuando haya múltiples instancias del servidor.
  */
 const obtenerJobs = async (batchSize) => {
-    // Prisma no soporta FOR UPDATE SKIP LOCKED directamente
-    // usamos $queryRaw para esta query crítica
     const ahora = new Date()
+    const tipos = Object.keys(HANDLERS) // ['workflow_trigger','ticket_auto','grabacion_fetch']
     const jobs = await prisma.$queryRaw`
         SELECT id, empresa_id, tipo, payload, intentos, max_intentos
         FROM jobs_async
         WHERE status = 'pendiente'
+        AND tipo = ANY(${tipos})
         AND fecha_programada <= ${ahora}
         ORDER BY fecha_programada ASC
         LIMIT ${batchSize}
@@ -83,7 +83,6 @@ const obtenerJobs = async (batchSize) => {
     `
     return jobs
 }
-
 /**
  * Procesa un job individual.
  */
