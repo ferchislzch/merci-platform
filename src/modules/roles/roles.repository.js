@@ -6,7 +6,9 @@ const prisma = require('../../config/database')
  */
 const listar = ({ empresaId }) => {
   return prisma.catalogo_roles.findMany({
-    where: { empresa_id: empresaId, deleted_at: null },
+    // es_protegido: { not: true } trata null como "no protegido" — los roles
+    // existentes antes de esta migración no tienen el campo seteado.
+    where: { empresa_id: empresaId, deleted_at: null, es_protegido: { not: true } },
     include: {
       _count: { select: { usuario_roles: true } },
       roles_permisos: {
@@ -19,7 +21,10 @@ const listar = ({ empresaId }) => {
 
 const buscarPorId = ({ rolId, empresaId }) => {
   return prisma.catalogo_roles.findFirst({
-    where: { id: rolId, empresa_id: empresaId, deleted_at: null },
+    // Mismo filtro que listar(): un rol protegido "no existe" para esta API.
+    // editar/eliminar/asignarPermisos llaman a buscarPorId primero, así que
+    // este único filtro basta para bloquear las 4 operaciones de escritura.
+    where: { id: rolId, empresa_id: empresaId, deleted_at: null, es_protegido: { not: true } },
     include: {
       _count: { select: { usuario_roles: true } },
       roles_permisos: {
@@ -41,15 +46,16 @@ const existeDuplicado = ({ empresaId, nombre, excluirId = null }) => {
   })
 }
 
-const crear = ({ empresaId, nombre, descripcion }) => {
+const crear = ({ empresaId, nombre, descripcion, color }) => {
   return prisma.catalogo_roles.create({
     data: {
       empresa_id: empresaId,
       nombre,
       descripcion: descripcion || null,
+      color: color || null,
       es_global: false,
     },
-    select: { id: true, nombre: true, descripcion: true, fecha_registro: true },
+    select: { id: true, nombre: true, descripcion: true, color: true, fecha_registro: true },
   })
 }
 

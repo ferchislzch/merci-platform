@@ -20,7 +20,9 @@ const listarTodos = () => {
 const verificarPermisos = ({ permisosIds }) => {
   return prisma.permisos.findMany({
     where: { id: { in: permisosIds }, deleted_at: null },
-    select: { id: true },
+    // `clave` se agrega para que roles.service.asignarPermisos pueda comparar
+    // contra los permisos del usuario (anti-escalación) sin una segunda consulta.
+    select: { id: true, clave: true },
   })
 }
 

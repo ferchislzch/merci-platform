@@ -200,6 +200,12 @@ model catalogo_roles {
   nombre              String           @unique(map: "uq_roles_global_nombre", where: raw("((empresa_id IS NULL) AND (deleted_at IS NULL))")) @db.VarChar(50)
   descripcion         String?
   es_global           Boolean?         @default(false)
+  color               String?          @db.VarChar(7)
+  // Marca el rol "Administrador General" que se crea automático por empresa.
+  // Invisible/inmutable para cualquier usuario de la empresa vía esta API
+  // (incluido quien lo tiene asignado) — solo el equipo MERCI lo toca, fuera
+  // de este frontend. Ver roles.repository.listar()/buscarPorId().
+  es_protegido        Boolean?         @default(false)
   deleted_at          DateTime?        @db.Timestamp(6)
   fecha_registro      DateTime?        @default(now()) @db.Timestamp(6)
   fecha_actualizacion DateTime?        @default(now()) @db.Timestamp(6)

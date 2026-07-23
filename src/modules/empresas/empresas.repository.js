@@ -2,13 +2,32 @@
 
 const prisma = require('../../config/database')
 
-// Permisos excluidos del rol "Administrador de Sucursal"
+// Permisos excluidos del rol "Administrador de Sucursal": todo lo que sea
+// gestión de TODA la empresa (no solo de su sucursal). `sucursales.ver` se
+// agregó junto a `sucursales.gestionar` para ocultar la vista de Sucursales
+// por completo (antes solo se excluía gestionar, dejando ver visible).
 const PERMISOS_EXCLUIDOS_ADMIN_SUCURSAL = [
+  'sucursales.ver',
   'sucursales.gestionar',
   'empresa.configurar',
   'auditoria.ver',
   'auditoria.exportar',
 ]
+
+// Permisos excluidos del rol "Administrador General": gestionar departamentos
+// requiere estar asociado a UNA sucursal (departamentos.crear() usa el
+// sucursalId del JWT tal cual, sin validar null), y Admin General tiene
+// sucursalId = null por diseño (ve toda la empresa, no está atado a una).
+const PERMISOS_EXCLUIDOS_ADMIN_GENERAL = [
+  'departamentos.ver',
+  'departamentos.gestionar',
+]
+
+// Colores fijos de los roles por defecto — mismos que ya se usan en el
+// mockup de diseño, para que el primer vistazo a Roles y Permisos ya se vea
+// consistente sin depender de la asignación aleatoria del frontend.
+const COLOR_ADMIN_GENERAL = '#F59E0B'  // ámbar
+const COLOR_ADMIN_SUCURSAL = '#3B82F6' // azul
 
 const listar = () => {
   return prisma.empresas.findMany({
@@ -115,8 +134,15 @@ const cambiarStatus = ({ empresaId, status }) => {
  * Crea los 2 roles predeterminados de toda empresa nueva y les asigna
  * sus permisos correspondientes en una sola transacción.
  *
- * Administrador General  → todos los permisos del catálogo
- * Administrador de Sucursal → todos EXCEPTO los 4 de gestión global
+ * Administrador General     → todos los permisos del catálogo EXCEPTO
+ *                              departamentos.ver/gestionar (requieren estar
+ *                              atado a una sucursal; Admin General no lo está).
+ *                              Además queda marcado es_protegido: true —
+ *                              invisible/inmutable para toda la empresa,
+ *                              incluido quien lo tiene asignado.
+ * Administrador de Sucursal → todos EXCEPTO los 5 de gestión global
+ *                              (sucursales.ver/gestionar, empresa.configurar,
+ *                              auditoria.ver/exportar)
  *
  * Si la transacción falla (ej. permiso faltante en catálogo), se hace
  * rollback completo — la empresa queda creada pero sin roles,
@@ -133,20 +159,28 @@ const crearRolesDefault = async ({ empresaId }) => {
     throw new Error('El catálogo de permisos está vacío — no se pueden crear roles por defecto')
   }
 
-  const idsAdminGeneral = todosLosPermisos.map((p) => p.id)
+  const idsAdminGeneral = todosLosPermisos
+    .filter((p) => !PERMISOS_EXCLUIDOS_ADMIN_GENERAL.includes(p.clave))
+    .map((p) => p.id)
 
   const idsAdminSucursal = todosLosPermisos
     .filter((p) => !PERMISOS_EXCLUIDOS_ADMIN_SUCURSAL.includes(p.clave))
     .map((p) => p.id)
 
   return prisma.$transaction(async (tx) => {
-    // 1. Crear rol Administrador General
+    // 1. Crear rol Administrador General — PROTEGIDO: es_protegido: true lo
+    //    hace invisible/inmutable para cualquier consulta de esta empresa vía
+    //    la API de roles (ver roles.repository.listar()/buscarPorId()).
+    //    Ni siquiera quien lo tiene asignado puede verlo o editarlo desde el
+    //    frontend — solo el equipo MERCI, fuera de esta API.
     const rolGeneral = await tx.catalogo_roles.create({
       data: {
-        empresa_id:  empresaId,
-        nombre:      'Administrador General',
-        descripcion: 'Acceso total a la empresa incluyendo gestión de sucursales',
-        es_global:   false,
+        empresa_id:   empresaId,
+        nombre:       'Administrador General',
+        descripcion:  'Acceso total a la empresa incluyendo gestión de sucursales',
+        es_global:    false,
+        es_protegido: true,
+        color:        COLOR_ADMIN_GENERAL,
       },
       select: { id: true, nombre: true },
     })
@@ -158,6 +192,7 @@ const crearRolesDefault = async ({ empresaId }) => {
         nombre:      'Administrador de Sucursal',
         descripcion: 'Acceso completo a su sucursal, sin gestión global de empresa',
         es_global:   false,
+        color:       COLOR_ADMIN_SUCURSAL,
       },
       select: { id: true, nombre: true },
     })

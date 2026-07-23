@@ -10,6 +10,7 @@ const formatearRol = (rol) => ({
   rolId: rol.id,
   nombre: rol.nombre,
   descripcion: rol.descripcion,
+  color: rol.color,
   totalUsuarios: rol._count?.usuario_roles ?? 0,
   permisos: (rol.roles_permisos || []).map((rp) => ({
     permisoId: rp.permisos.id,
@@ -33,13 +34,13 @@ const obtenerPorId = async ({ rolId, empresaId }) => {
   return formatearRol(rol)
 }
 
-const crear = async ({ empresaId, nombre, descripcion }, { usuarioId, ip }) => {
+const crear = async ({ empresaId, nombre, descripcion, color }, { usuarioId, ip }) => {
   if (!nombre) throw new AppError('El nombre del rol es requerido', 400)
 
   const duplicado = await rolesRepository.existeDuplicado({ empresaId, nombre })
   if (duplicado) throw new AppError('Ya existe un rol con ese nombre en esta empresa', 409)
 
-  const rol = await rolesRepository.crear({ empresaId, nombre, descripcion })
+  const rol = await rolesRepository.crear({ empresaId, nombre, descripcion, color })
 
   await audit.log({
     usuarioId,
@@ -49,10 +50,10 @@ const crear = async ({ empresaId, nombre, descripcion }, { usuarioId, ip }) => {
     accion: 'INSERT',
     tabla: 'catalogo_roles',
     registroId: rol.id,
-    datosNuevos: { nombre, descripcion },
+    datosNuevos: { nombre, descripcion, color },
   })
 
-  return { rolId: rol.id, nombre: rol.nombre, descripcion: rol.descripcion }
+  return { rolId: rol.id, nombre: rol.nombre, descripcion: rol.descripcion, color: rol.color }
 }
 
 const editar = async ({ rolId, empresaId, nombre, descripcion }, { usuarioId, ip }) => {
@@ -121,7 +122,16 @@ const eliminar = async ({ rolId, empresaId }, { usuarioId, ip }) => {
  * Valida que todos los permisosIds existan en el catálogo global de permisos
  * antes de asignarlos.
  */
-const asignarPermisos = async ({ rolId, empresaId, permisosIds }, { usuarioId, ip }) => {
+/**
+ * Anti-escalación (opción B): nadie puede asignarle a un rol un permiso que
+ * él mismo no tenga — así un Admin de Sucursal no puede fabricarse (o darle
+ * a otro rol) un permiso de mayor alcance del que él posee. El Super Admin
+ * (esGlobal) queda exento, igual que el resto de los checks de permission.middleware.
+ */
+const asignarPermisos = async (
+  { rolId, empresaId, permisosIds },
+  { usuarioId, ip, esGlobal = false, permisosDelUsuario = [] }
+) => {
   if (!Array.isArray(permisosIds)) {
     throw new AppError('permisosIds debe ser un array', 400)
   }
@@ -129,11 +139,26 @@ const asignarPermisos = async ({ rolId, empresaId, permisosIds }, { usuarioId, i
   const rol = await rolesRepository.buscarPorId({ rolId, empresaId })
   if (!rol) throw new NotFoundError('Rol')
 
-  // Validar que todos los permisos existen
+  // Validar que todos los permisos existen (y de paso obtener su `clave`,
+  // reutilizada abajo para el chequeo anti-escalación sin otra consulta)
+  let permisosValidos = []
   if (permisosIds.length > 0) {
-    const permisosValidos = await permisosRepository.verificarPermisos({ permisosIds })
+    permisosValidos = await permisosRepository.verificarPermisos({ permisosIds })
     if (permisosValidos.length !== permisosIds.length) {
       throw new AppError('Uno o más permisos no existen en el sistema', 400)
+    }
+  }
+
+  if (!esGlobal) {
+    const clavesNoAutorizadas = permisosValidos
+      .filter((p) => !permisosDelUsuario.includes(p.clave))
+      .map((p) => p.clave)
+
+    if (clavesNoAutorizadas.length > 0) {
+      throw new AppError(
+        `No puedes asignar permisos que tú mismo no tienes: ${clavesNoAutorizadas.join(', ')}`,
+        403
+      )
     }
   }
 

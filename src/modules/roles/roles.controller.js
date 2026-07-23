@@ -24,9 +24,9 @@ const obtenerPorId = async (req, res, next) => {
 
 const crear = async (req, res, next) => {
   try {
-    const { nombre, descripcion } = req.body
+    const { nombre, descripcion, color } = req.body
     const rol = await rolesService.crear(
-      { empresaId: req.empresaId, nombre, descripcion },
+      { empresaId: req.empresaId, nombre, descripcion, color },
       { usuarioId: req.user.usuarioId, ip: req.ip }
     )
     res.status(201).json({ ok: true, mensaje: 'Rol creado', data: { rol } })
@@ -65,7 +65,12 @@ const asignarPermisos = async (req, res, next) => {
     const { permisosIds } = req.body
     await rolesService.asignarPermisos(
       { rolId: req.params.id, empresaId: req.empresaId, permisosIds },
-      { usuarioId: req.user.usuarioId, ip: req.ip }
+      {
+        usuarioId: req.user.usuarioId,
+        ip: req.ip,
+        esGlobal: req.user.esGlobal,
+        permisosDelUsuario: req.user.permisos,
+      }
     )
     res.json({ ok: true, mensaje: 'Permisos asignados correctamente' })
   } catch (err) {
