@@ -9,12 +9,9 @@ const obtenerTodos = async (empresaId) => {
     });
 };
 
-const crearAgente = async (empresaId, datosAgente) => {
+const crear = async (datosAgente) => {
     return await prisma.agentes_virtuales.create({
-        data: {
-            ...datosAgente, // Aquí vienen el nombre, rol, etc.
-            empresa_id: empresaId // Forzamos el ID de la empresa por seguridad
-        }
+        data: datosAgente
     });
 };
 
@@ -43,9 +40,7 @@ const cambiarEstado = async (id, estadoId) => {
             id: id
         },
         data: {
-            catalogo_estado_agente: {
-                connect: { id: estadoId }
-            }
+            estado_agente_id: estadoId
         }
     });
 };
@@ -63,7 +58,7 @@ const eliminarLogico = async (id) => {
 
 module.exports = {
     obtenerTodos,
-    crearAgente,
+    crear,
     obtenerPorId,
     actualizar,
     cambiarEstado,

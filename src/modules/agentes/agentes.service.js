@@ -1,60 +1,72 @@
 const agentesRepository = require('./agentes.repository');
 
 const obtenerAgentes = async (empresaId) => {
-    // El servicio le pide los datos al repositorio
     return await agentesRepository.obtenerTodos(empresaId);
-};
-
-const crearAgente = async (empresaId, datosAgente) => {
-    // Aquí después podríamos agregar validaciones extra si se ocupan
-    return await agentesRepository.crearAgente(empresaId, datosAgente);
 };
 
 const obtenerAgentePorId = async (id, empresaId) => {
     return await agentesRepository.obtenerPorId(id, empresaId);
 };
 
-const actualizarAgente = async (id, empresaId, datosActualizados) => {
-    // 1. Validar si el agente existe y pertenece a la empresa
-    const agenteExistente = await agentesRepository.obtenerPorId(id, empresaId);
-    
-    if (!agenteExistente) {
-        return null; // Detener el proceso si no pasa el filtro de seguridad
-    }
+const crearAgente = async (empresaId, datos, usuarioId) => {
+    const nuevoAgente = await agentesRepository.crear({
+        ...datos,
+        empresa_id: empresaId
+    });
 
-    // 2. Si todo está correcto, proceder a actualizar
-    return await agentesRepository.actualizar(id, datosActualizados);
+    console.log(`[AUDITORIA] Agente creado: ${nuevoAgente.id} por Usuario: ${usuarioId || 'Desconocido'} en Empresa: ${empresaId}`);
+    return nuevoAgente;
 };
 
-const cambiarEstadoAgente = async (id, empresaId, estadoId) => {
-    // 1. Validar si el agente existe y pertenece a la empresa
+const actualizarAgente = async (id, empresaId, datos, usuarioId) => {
+    // 1. Validar existencia y pertenecencia a la empresa (Protección Anti-IDOR)
     const agenteExistente = await agentesRepository.obtenerPorId(id, empresaId);
-    
     if (!agenteExistente) {
         return null;
     }
 
-    // 2. Proceder a cambiar el estado enviando el ID del catálogo
-    return await agentesRepository.cambiarEstado(id, estadoId);
+    // 2. Actualizar registros en BD
+    const agenteActualizado = await agentesRepository.actualizar(id, datos);
+
+    console.log(`[AUDITORIA] Agente actualizado: ${id} por Usuario: ${usuarioId || 'Desconocido'} en Empresa: ${empresaId}`);
+    return agenteActualizado;
 };
 
-const eliminarAgente = async (id, empresaId) => {
-    // 1. Validar si el agente existe y pertenece a la empresa del Token
+const cambiarEstadoAgente = async (id, empresaId, estadoId, usuarioId) => {
+    // 1. Validar existencia y pertenecencia a la empresa
     const agenteExistente = await agentesRepository.obtenerPorId(id, empresaId);
-    
     if (!agenteExistente) {
-        return null; // Detiene el proceso si no pasa el filtro de seguridad
+        return null;
     }
 
-    // 2. Si todo es correcto, ejecuta el borrado lógico en el repositorio
-    return await agentesRepository.eliminarLogico(id);
+    // 2. Actualizar solo el estado
+    const agenteActualizado = await agentesRepository.actualizar(id, {
+        estado_agente_id: estadoId
+    });
+
+    console.log(`[AUDITORIA] Estado de Agente ${id} cambiado a ${estadoId} por Usuario: ${usuarioId || 'Desconocido'}`);
+    return agenteActualizado;
+};
+
+const eliminarAgente = async (id, empresaId, usuarioId) => {
+    // 1. Validar existencia y pertenecencia a la empresa
+    const agenteExistente = await agentesRepository.obtenerPorId(id, empresaId);
+    if (!agenteExistente) {
+        return null;
+    }
+
+    // 2. Borrado lógico (soft delete)
+    const agenteEliminado = await agentesRepository.eliminarLogico(id);
+
+    console.log(`[AUDITORIA] Agente eliminado lógicamente: ${id} por Usuario: ${usuarioId || 'Desconocido'}`);
+    return agenteEliminado;
 };
 
 module.exports = {
     obtenerAgentes,
-    crearAgente,
     obtenerAgentePorId,
+    crearAgente,
     actualizarAgente,
     cambiarEstadoAgente,
     eliminarAgente
-};  
+};

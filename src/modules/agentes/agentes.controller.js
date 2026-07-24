@@ -1,14 +1,57 @@
 const agentesService = require('./agentes.service');
 
+// Helper interno para limpiar objetos y dejar solo campos presentes en el req.body
+const filtrarCampos = (body) => {
+    const camposPermitidos = [
+        'nombre',
+        'descripcion',
+        'numero_entrada',
+        'numeroEntrada',
+        'tipo_agente_id',
+        'tipoAgenteId',
+        'estado_agente_id',
+        'estadoAgenteId',
+        'sucursal_id',
+        'sucursalId',
+        'departamento_id',
+        'departamentoId',
+        'calendario_id',
+        'calendarioId'
+    ];
+
+    const datosLimpios = {};
+
+    // Mapeo unificado a los nombres exactos de la base de datos (snake_case)
+    if (body.nombre !== undefined) datosLimpios.nombre = body.nombre;
+    if (body.descripcion !== undefined) datosLimpios.descripcion = body.descripcion;
+    
+    if (body.numero_entrada !== undefined || body.numeroEntrada !== undefined) {
+        datosLimpios.numero_entrada = body.numero_entrada ?? body.numeroEntrada;
+    }
+    if (body.tipo_agente_id !== undefined || body.tipoAgenteId !== undefined) {
+        datosLimpios.tipo_agente_id = body.tipo_agente_id ?? body.tipoAgenteId;
+    }
+    if (body.estado_agente_id !== undefined || body.estadoAgenteId !== undefined) {
+        datosLimpios.estado_agente_id = body.estado_agente_id ?? body.estadoAgenteId;
+    }
+    if (body.sucursal_id !== undefined || body.sucursalId !== undefined) {
+        datosLimpios.sucursal_id = body.sucursal_id ?? body.sucursalId;
+    }
+    if (body.departamento_id !== undefined || body.departamentoId !== undefined) {
+        datosLimpios.departamento_id = body.departamento_id ?? body.departamentoId;
+    }
+    if (body.calendario_id !== undefined || body.calendarioId !== undefined) {
+        datosLimpios.calendario_id = body.calendario_id ?? body.calendarioId;
+    }
+
+    return datosLimpios;
+};
+
 const obtenerAgentes = async (req, res, next) => {
     try {
-        // Extraemos el ID de la empresa directamente de req (nunca de req.user.empresaId) 
         const empresaId = req.empresaId;
-        
-        // Llamamos al service
         const agentes = await agentesService.obtenerAgentes(empresaId);
         
-        // Respondemos con el formato estándar obligatorio [cite: 694-699]
         res.json({ 
             ok: true, 
             mensaje: "Lista de agentes obtenida", 
@@ -24,18 +67,15 @@ const obtenerAgentePorId = async (req, res, next) => {
         const { id } = req.params;      
         const empresaId = req.empresaId; 
 
-        // 👇 EXPRESIÓN REGULAR PARA VALIDAR SI EL ID ES UN UUID VÁLIDO
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         
         if (!uuidRegex.test(id)) {
-            // Si no cumple el formato UUID, respondemos inmediatamente con 404
             return res.status(404).json({
                 ok: false,
                 mensaje: "Agente no encontrado"
             });
         }
 
-        // Si el formato es correcto, procedemos con la búsqueda en la base de datos
         const agente = await agentesService.obtenerAgentePorId(id, empresaId);
 
         if (!agente) {
@@ -57,14 +97,8 @@ const obtenerAgentePorId = async (req, res, next) => {
 
 const crearAgente = async (req, res, next) => {
     try {
-        // 1. Ponemos estos console.log para ver dónde está escondido el ID
-        console.log("Datos en req.user:", req.user);
-        console.log("Datos en req.empresaId:", req.empresaId);
-
-        // 2. Intentamos sacarlo de los lugares más comunes
         const empresaId = req.empresaId || req.user?.empresa_id || req.user?.empresaId || req.usuario?.empresa_id;
 
-        // 3. Validamos que ahora sí exista
         if (!empresaId) {
             return res.status(400).json({ 
                 ok: false, 
@@ -72,8 +106,11 @@ const crearAgente = async (req, res, next) => {
             });
         }
 
-        const datosAgente = req.body;    
-        const nuevoAgente = await agentesService.crearAgente(empresaId, datosAgente);
+        // 🛑 WHITELIST: Extraer y limpiar datos
+        const datosLimpios = filtrarCampos(req.body);
+
+        const usuarioId = req.user?.id || req.usuario?.id; // Para auditoría
+        const nuevoAgente = await agentesService.crearAgente(empresaId, datosLimpios, usuarioId);
 
         res.status(201).json({
             ok: true,
@@ -89,9 +126,7 @@ const actualizarAgente = async (req, res, next) => {
     try {
         const { id } = req.params;
         const empresaId = req.empresaId;
-        const datosActualizados = req.body; // Captura los datos que el usuario quiere cambiar
 
-        // Expresión regular para validar el formato del UUID
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         
         if (!uuidRegex.test(id)) {
@@ -101,7 +136,19 @@ const actualizarAgente = async (req, res, next) => {
             });
         }
 
-        const agenteActualizado = await agentesService.actualizarAgente(id, empresaId, datosActualizados);
+        // 🛑 WHITELIST: Filtrar solo campos definidos
+        const datosActualizados = filtrarCampos(req.body);
+
+        // Si no viene ningún campo válido en el body
+        if (Object.keys(datosActualizados).length === 0) {
+            return res.status(400).json({
+                ok: false,
+                mensaje: "No se enviaron campos válidos para actualizar"
+            });
+        }
+
+        const usuarioId = req.user?.id || req.usuario?.id; // Para auditoría
+        const agenteActualizado = await agentesService.actualizarAgente(id, empresaId, datosActualizados, usuarioId);
 
         if (!agenteActualizado) {
             return res.status(404).json({
@@ -124,24 +171,26 @@ const cambiarEstadoAgente = async (req, res, next) => {
     try {
         const { id } = req.params;
         const empresaId = req.empresaId;
-        const { estadoId } = req.body; // 👇 Ahora esperamos el ID del estado del catálogo
+        const { estadoId, estado_agente_id } = req.body;
+        
+        const nuevoEstadoId = estadoId || estado_agente_id;
 
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         
-        // Validamos el ID del agente
         if (!uuidRegex.test(id)) {
             return res.status(404).json({ ok: false, mensaje: "Agente no encontrado" });
         }
 
-        // 👇 Validamos que el estadoId recibido también tenga formato UUID válido
-        if (!estadoId || !uuidRegex.test(estadoId)) {
+        if (!nuevoEstadoId || !uuidRegex.test(nuevoEstadoId)) {
             return res.status(400).json({ 
                 ok: false, 
                 mensaje: "El campo estadoId es requerido y debe ser un UUID válido" 
             });
         }
 
-        const agenteActualizado = await agentesService.cambiarEstadoAgente(id, empresaId, estadoId);
+        const usuarioId = req.user?.id || req.usuario?.id; // Para auditoría
+        const agenteActualizado = await agentesService.cambiarEstadoAgente(id, empresaId, nuevoEstadoId, usuarioId);
+        
         if (!agenteActualizado) {
             return res.status(404).json({ ok: false, mensaje: "Agente no encontrado" });
         }
@@ -158,42 +207,37 @@ const cambiarEstadoAgente = async (req, res, next) => {
 
 const eliminarAgente = async (req, res, next) => {
     try {
-        const { id } = req.params;       // Extrae el :id de la URL
-        const empresaId = req.empresaId;  // El ID de la empresa inyectado por el middleware de autenticación
+        const { id } = req.params;
+        const empresaId = req.empresaId;
 
-        // Expresión regular para validar el formato del UUID
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         
         if (!uuidRegex.test(id)) {
-            // Si el ID tiene letras de más, de menos o caracteres inválidos, responde 404 de inmediato
             return res.status(404).json({
                 ok: false,
                 mensaje: "Agente no encontrado"
             });
         }
 
-        // Llama al servicio enviando el ID y el ID de la empresa
-        const agenteEliminado = await agentesService.eliminarAgente(id, empresaId);
+        const usuarioId = req.user?.id || req.usuario?.id; // Para auditoría
+        const agenteEliminado = await agentesService.eliminarAgente(id, empresaId, usuarioId);
 
         if (!agenteEliminado) {
-            // Si el servicio devolvió null (no existía o era de otra empresa)
             return res.status(404).json({
                 ok: false,
                 mensaje: "Agente no encontrado"
             });
         }
 
-        // Respuesta exitosa
         res.status(200).json({
             ok: true,
             mensaje: "Agente eliminado exitosamente"
         });
     } catch (error) {
-        next(error); // Pasa cualquier error inesperado al manejador global
+        next(error);
     }
 };
 
-// Exportamos todas las funciones
 module.exports = {
     obtenerAgentes,
     obtenerAgentePorId,
